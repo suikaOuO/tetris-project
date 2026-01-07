@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris Graph Paper Style</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="game-layout">
+    <!-- 左側面板：暫存與操作說明 -->
+    <div class="side-panel">
+        <div class="panel-section">
+            <h3>HOLD</h3>
+            <canvas id="hold-canvas" class="mini-canvas" width="120" height="120"></canvas>
+        </div>
+        
+        <div class="controls-info">
+            <div class="key-row"><span class="key-badge">Shift</span> <span>暫存(Hold)</span></div>
+            <div class="key-row"><span class="key-badge">ESC</span> <span>暫停</span></div>
+            <div class="key-row"><span class="key-badge">空白</span> <span>直接落下</span></div>
+            <div class="key-row"><span class="key-badge">↑</span> <span>旋轉</span></div>
+            <div class="key-row"><span class="key-badge">←↓→</span> <span>移動</span></div>
+        </div>
+    </div>
+
+    <!-- 中間面板：遊戲主畫面 -->
+    <div style="position: relative;">
+        <!-- 主畫布 -->
+        <canvas id="main-canvas" width="300" height="600"></canvas>
+        
+        <!-- 暫停遮罩 -->
+        <div id="pause-overlay">
+            <div style="font-size: 3rem;">PAUSED</div>
+            <div style="font-size: 1rem; margin-top: 10px; font-weight: normal;">按 ESC 繼續</div>
+        </div>
+    </div>
+
+    <!-- 右側面板：下一個與分數 -->
+    <div class="side-panel">
+        <div class="panel-section">
+            <h3>NEXT</h3>
+            <!-- 高度設定為 360 以容納更多方塊且不擁擠 -->
+            <canvas id="next-canvas" class="mini-canvas" width="120" height="360"></canvas>
+        </div>
+
+        <div class="panel-section" style="margin-top: auto;">
+            <div class="score-box">
+                <div class="score-label">SCORE</div>
+                <div class="score-val" id="score">0</div>
+            </div>
+            <div class="score-box">
+                <div class="score-label">LINES</div>
+                <div class="score-val" id="lines">0</div>
+            </div>
+            <div class="score-box">
+                <div class="score-label">LEVEL</div>
+                <div class="score-val" id="level">1</div>
+            </div>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <button id="btn-start">開始遊戲</button>
+            <button id="btn-end" disabled>結束遊戲</button>
+        </div>
+    </div>
+</div>
+
+<!-- 遊戲結束視窗 -->
+<dialog id="game-over-dialog">
+    <h2>GAME OVER</h2>
+    <p style="color: #64748b; font-size: 1.2rem;">最終分數</p>
+    <h1 id="final-score" style="font-size: 3.5rem; margin: 15px 0; color: #334155;">0</h1>
+    <div style="display: flex; gap: 10px; justify-content: center;">
+        <button onclick="resetGame()" style="width: auto; background: #22c55e; color: white; border-color: #15803d; padding: 10px 40px;">再玩一次</button>
+    </div>
+</dialog>
+
+<script src="script.js"></script>
+</body>
+</html>

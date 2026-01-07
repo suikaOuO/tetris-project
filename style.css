@@ -1,0 +1,175 @@
+/* --- 全域設定 --- */
+:root {
+    --page-bg: #fdfcf5;        /* 淺卡其色背景 */
+    --game-bg: #ffffff;        /* 遊戲區域白底 */
+    --grid-line: #cbd5e1;      /* 遊戲內格線顏色 (藍灰色) */
+    --border-color: #475569;   /* 深色邊框 */
+    --text-color: #334155;
+    --block-size: 30px;        /* 方塊大小，需配合 JS */
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    background-color: var(--page-bg);
+    font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    color: var(--text-color);
+}
+
+/* --- 遊戲主容器 --- */
+#game-layout {
+    display: flex;
+    gap: 25px;
+    padding: 25px;
+    background: rgba(255, 255, 255, 0.6);
+    border: 3px solid var(--border-color);
+    border-radius: 8px;
+    /* 輕微陰影讓它浮起來 */
+    box-shadow: 8px 8px 0px rgba(71, 85, 105, 0.2);
+}
+
+/* --- 側邊欄位 --- */
+.side-panel {
+    display: flex;
+    flex-direction: column;
+    width: 140px; /* 面板寬度 */
+    justify-content: space-between;
+}
+
+.panel-section {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+h3 {
+    margin: 0 0 10px 0;
+    font-size: 1.2rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 5px;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+/* --- Canvas 設定 --- */
+canvas {
+    display: block;
+    margin: 0 auto;
+}
+
+/* 遊戲主畫面：方格紙背景設定在這裡 */
+#main-canvas {
+    border: 2px solid var(--border-color);
+    background-color: var(--game-bg);
+    /* CSS 繪製格線 */
+    background-image: 
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    /* 格子大小必須對應 JS 的 BLOCK_SIZE (30px) */
+    background-size: 30px 30px;
+    /* 修正格線對齊，讓線在格子邊緣 */
+    background-position: -1px -1px;
+}
+
+/* 小視窗不需要格線，保持乾淨 */
+.mini-canvas {
+    border: 2px dashed #94a3b8;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 4px;
+}
+
+/* --- 分數顯示 --- */
+.score-box {
+    background: #fff;
+    border: 2px solid var(--border-color);
+    padding: 8px;
+    margin-top: 8px;
+    text-align: right;
+}
+.score-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; text-align: left; font-weight: bold;}
+.score-val { font-size: 1.4rem; font-weight: 900; color: var(--text-color); }
+
+/* --- 按鈕 --- */
+button {
+    width: 100%;
+    padding: 12px;
+    margin: 6px 0;
+    border: 2px solid var(--border-color);
+    background: #fff;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.1s;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+}
+button:hover:not(:disabled) {
+    background: var(--border-color);
+    color: #fff;
+}
+button:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+}
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #e2e8f0;
+    box-shadow: none;
+}
+
+#btn-start { background-color: #dcfce7; border-color: #166534; color: #14532d; }
+#btn-start:hover:not(:disabled) { background-color: #166534; color: white; }
+
+#btn-end { background-color: #fee2e2; border-color: #991b1b; color: #7f1d1d; }
+#btn-end:hover:not(:disabled) { background-color: #991b1b; color: white; }
+
+/* --- 暫停遮罩 --- */
+#pause-overlay {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255, 255, 255, 0.85);
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-size: 2rem;
+    font-weight: 900;
+    z-index: 10;
+    backdrop-filter: blur(2px);
+    color: var(--border-color);
+}
+
+/* --- 遊戲結束彈窗 (Dialog) --- */
+dialog {
+    border: 3px solid var(--border-color);
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    box-shadow: 15px 15px 0 rgba(0,0,0,0.15);
+    background: #fff;
+    min-width: 300px;
+}
+dialog::backdrop {
+    background: rgba(51, 65, 85, 0.5);
+}
+dialog h2 { margin-top: 0; color: #ef4444; font-size: 2.5rem; font-weight: 900; }
+
+/* --- 操作說明 --- */
+.controls-info {
+    font-size: 0.85rem;
+    color: #475569;
+    text-align: left;
+    margin-top: auto;
+    border-top: 2px dashed #cbd5e1;
+    padding-top: 15px;
+}
+.key-row { display: flex; justify-content: space-between; margin: 6px 0; align-items: center; }
+.key-badge { 
+    background: #f1f5f9; border: 1px solid #94a3b8; border-bottom-width: 3px;
+    padding: 2px 6px; border-radius: 4px; font-weight: bold; font-family: monospace; font-size: 0.75rem;
+    min-width: 18px; text-align: center; color: #334155;
+}
