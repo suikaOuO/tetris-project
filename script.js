@@ -1,10 +1,11 @@
 /* ==========================================
-   TETRIS 遊戲核心邏輯 (All Clear + IJKL版)
+   TETRIS 遊戲核心邏輯 (All Clear + IJKL版 + 鎖定延遲)
    ========================================== */
 
 const COLS = 10;
 const ROWS = 20;
 const BLOCK_SIZE = 30;
+const LOCK_DELAY = 500; // 0.5 秒鎖定延遲
 
 const PIECES = {
     'I': [[0,0,0,0], [1,1,1,1], [0,0,0,0], [0,0,0,0]],
@@ -35,6 +36,9 @@ let isPaused = false, isGameOver = false, requestId = null;
 let bag = [], nextQueue = [], holdPiece = null, canHold = true;
 let isAnimating = false;
 let HATCH_PATTERNS = [];
+
+// 鎖定延遲變數
+let lockStartTime = null;
 
 let player = { pos: {x: 0, y: 0}, matrix: null, type: null };
 
@@ -100,11 +104,12 @@ function startGame() {
     isAnimating = false;
     
     bag = []; nextQueue = []; holdPiece = null; canHold = true;
+    lockStartTime = null; // 重置鎖定計時
     
     updateScoreUI();
     toggleButtons(true);
     document.getElementById('pause-overlay').style.display = 'none';
-    document.getElementById('all-clear-message').classList.remove('show'); // 重置 All Clear
+    document.getElementById('all-clear-message').classList.remove('show');
     document.getElementById('game-over-dialog').close();
 
     fillNextQueue();
@@ -175,6 +180,8 @@ function playerReset() {
     player.pos.y = 0;
     player.pos.x = (COLS / 2 | 0) - (Math.ceil(player.matrix[0].length / 2));
 
+    lockStartTime = null; // 新方塊開始時重置鎖定計時
+
     if (collide(board, player)) {
         endGame();
     }
@@ -195,61 +202,89 @@ function collide(arena, player) {
 }
 
 // 矩陣旋轉演算法
-// dir = 1 (順時針), dir = -1 (逆時針), dir = 2 (180度)
 function rotate(matrix, dir) {
-    // 180度：旋轉兩次順時針
     if (dir === 2) {
         rotate(matrix, 1);
         rotate(matrix, 1);
         return;
     }
-
-    // 轉置矩陣 (Transpose)
     for (let y = 0; y < matrix.length; ++y) {
         for (let x = 0; x < y; ++x) {
             [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
         }
     }
-    
-    // 順時針：反轉每一列
-    if (dir > 0) {
-        matrix.forEach(row => row.reverse());
-    } 
-    // 逆時針：反轉矩陣行順序
-    else {
-        matrix.reverse();
+    if (dir > 0) matrix.forEach(row => row.reverse());
+    else matrix.reverse();
+}
+
+// 重置鎖定計時器 (Infinity Rule)
+function resetLockTimer() {
+    // 只有在接觸地面/方塊時才重置計時
+    player.pos.y++;
+    if (collide(board, player)) {
+        lockStartTime = Date.now();
     }
+    player.pos.y--;
 }
 
 function playerRotate(dir) {
     const pos = player.pos.x;
-    let offset = 1;
-    
+    const row = player.pos.y;
     rotate(player.matrix, dir);
     
-    // 簡單的 Wall Kick 測試
-    // 180度旋轉可能需要嘗試更多次 kick，這裡沿用簡單邏輯
-    while (collide(board, player)) {
-        player.pos.x += offset;
-        offset = -(offset + (offset > 0 ? 1 : -1));
-        if (offset > player.matrix[0].length) {
-            // 失敗，轉回去 (注意 180 度失敗轉回去也是轉 180 或 -2)
-            rotate(player.matrix, dir === 2 ? 2 : -dir);
-            player.pos.x = pos;
+    // 強化的 Wall Kick 判定 (包含 Floor Kick: [0, -1])
+    const kicks = [
+        [0, 0],   // 原地
+        [1, 0],   // 右移
+        [-1, 0],  // 左移
+        [0, -1],  // 上移 (踢地) - 這是 T-Spin 關鍵
+        [1, -1],  // 右上
+        [-1, -1], // 左上
+        [2, 0],   // 右移2格 (I型方塊常用)
+        [-2, 0]   // 左移2格
+    ];
+
+    for (const [ox, oy] of kicks) {
+        player.pos.x = pos + ox;
+        player.pos.y = row + oy;
+        if (!collide(board, player)) {
+            resetLockTimer(); // 旋轉成功，重置鎖定時間
             return;
         }
     }
+
+    // 全部失敗則轉回去
+    rotate(player.matrix, dir === 2 ? 2 : -dir);
+    player.pos.x = pos;
+    player.pos.y = row;
 }
 
 function playerDrop() {
     player.pos.y++;
     if (collide(board, player)) {
-        player.pos.y--;
-        merge(board, player);
-        arenaSweep(); 
-        if (!isAnimating) playerReset();
+        player.pos.y--; // 退回上方
+        
+        // --- 鎖定延遲邏輯 ---
+        if (lockStartTime === null) {
+            lockStartTime = Date.now(); // 開始計時
+        }
+        // 注意：這裡不主動 merge，而是等待 update 迴圈檢查時間
+        // 或等待下一次 playerDrop (如果沒有 update 檢查)
+        // 為了反應更即時，主要鎖定邏輯移至 update 或此處判斷
+        return; 
     }
+    
+    // 成功下落，重置鎖定狀態
+    lockStartTime = null; 
     dropCounter = 0;
+}
+
+// 執行真正的鎖定
+function finalizeMove() {
+    merge(board, player);
+    arenaSweep();
+    if (!isAnimating) playerReset();
+    lockStartTime = null;
 }
 
 function triggerShake() {
@@ -262,10 +297,8 @@ function triggerShake() {
 function showAllClear() {
     const msg = document.getElementById('all-clear-message');
     msg.classList.remove('show');
-    void msg.offsetWidth; // Reset animation
+    void msg.offsetWidth;
     msg.classList.add('show');
-    
-    // All Clear 獎勵分
     score += 2000 * level;
     updateScoreUI();
 }
@@ -275,10 +308,10 @@ function playerHardDrop() {
         player.pos.y++;
     }
     player.pos.y--;
-    merge(board, player);
+    
+    // 硬降直接忽略延遲
+    finalizeMove();
     score += 20;
-    arenaSweep();
-    if (!isAnimating) playerReset();
     dropCounter = 0;
 }
 
@@ -331,8 +364,6 @@ function arenaSweep() {
                 }
             });
 
-            // --- All Clear 檢查 ---
-            // 檢查盤面是否還有非0的格子
             let isAllClear = true;
             for (let y = 0; y < ROWS; y++) {
                 for (let x = 0; x < COLS; x++) {
@@ -375,6 +406,8 @@ function playerHold() {
         player.matrix = getPieceMatrix(player.type);
         player.pos.y = 0;
         player.pos.x = (COLS / 2 | 0) - (Math.ceil(player.matrix[0].length / 2));
+        
+        lockStartTime = null; // Hold 後重置鎖定
         if (collide(board, player)) endGame();
     }
     canHold = false;
@@ -386,7 +419,13 @@ function draw() {
     
     if (!isGameOver && !isAnimating && player.matrix) {
         drawGhost();
+        
+        // 視覺提示：如果快要鎖定了，可以改變透明度或顏色 (選擇性)
+        if (lockStartTime !== null) {
+            ctx.globalAlpha = 0.8; // 稍微透明一點表示落地
+        }
         drawMatrix(player.matrix, player.pos, ctx);
+        ctx.globalAlpha = 1.0;
     }
 
     drawNext();
@@ -481,6 +520,14 @@ function update(time = 0) {
         if (dropCounter > dropInterval) {
             playerDrop();
         }
+
+        // --- 獨立檢查鎖定延遲 ---
+        // 這樣即使 dropInterval 很長，也能在 0.5 秒後準時鎖定
+        if (lockStartTime !== null) {
+            if (Date.now() - lockStartTime > LOCK_DELAY) {
+                finalizeMove();
+            }
+        }
     }
     
     draw();
@@ -509,18 +556,18 @@ function handleInput(event) {
 
     if (isPaused) return;
 
-    // 禁用 IJKL 的預設行為 (如果有)
-    // 32(Space), 73(I), 74(J), 75(K), 76(L), 79(O), 85(U)
     if([32, 73, 74, 75, 76, 79, 85].includes(event.keyCode)) event.preventDefault();
 
     switch(event.keyCode) {
         case 74: // J (Left)
             player.pos.x--;
             if (collide(board, player)) player.pos.x++;
+            else resetLockTimer(); // 移動成功重置時間
             break;
         case 76: // L (Right)
             player.pos.x++;
             if (collide(board, player)) player.pos.x--;
+            else resetLockTimer(); // 移動成功重置時間
             break;
         case 75: // K (Down/Soft Drop)
             playerDrop();
