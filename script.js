@@ -1,5 +1,5 @@
 /* ==========================================
-   TETRIS 遊戲核心邏輯 (色鉛筆紋理版)
+   TETRIS 遊戲核心邏輯 (All Clear + IJKL版)
    ========================================== */
 
 const COLS = 10;
@@ -16,7 +16,6 @@ const PIECES = {
     'Z': [[7,7,0], [0,7,7], [0,0,0]]
 };
 
-// 顏色 (維持鮮豔度)
 const COLORS = [
     null,
     '#22d3ee', // I
@@ -35,8 +34,6 @@ let dropCounter = 0, dropInterval = 1000, lastTime = 0;
 let isPaused = false, isGameOver = false, requestId = null;
 let bag = [], nextQueue = [], holdPiece = null, canHold = true;
 let isAnimating = false;
-
-// 儲存生成的紋理圖案 (Patterns)
 let HATCH_PATTERNS = [];
 
 let player = { pos: {x: 0, y: 0}, matrix: null, type: null };
@@ -49,7 +46,6 @@ window.onload = function() {
     holdCanvas = document.getElementById('hold-canvas');
     holdCtx = holdCanvas.getContext('2d');
 
-    // 初始化紋理
     initPatterns();
 
     document.getElementById('btn-start').addEventListener('click', startGame);
@@ -60,34 +56,25 @@ window.onload = function() {
     draw(); 
 };
 
-// --- 新增：初始化色鉛筆紋理 ---
 function initPatterns() {
-    HATCH_PATTERNS = [null]; // 索引 0 是空的
-
-    // 為 COLORS 裡的每個顏色生成紋理
+    HATCH_PATTERNS = [null];
     for (let i = 1; i < COLORS.length; i++) {
         const color = COLORS[i];
-        
-        // 1. 創建一個微型 Canvas 來繪製圖案單元
         const pCanvas = document.createElement('canvas');
-        // 設定紋理密度：數值越小越密。背景大約是 15px，這裡我們設為 6px
         const size = 6; 
         pCanvas.width = size;
         pCanvas.height = size;
         const pCtx = pCanvas.getContext('2d');
 
-        // 2. 繪製斜線 (模擬筆觸)
         pCtx.strokeStyle = color;
-        pCtx.lineWidth = 1.5; // 筆觸粗細
-        pCtx.lineCap = 'round'; // 圓頭筆觸較自然
+        pCtx.lineWidth = 1.5;
+        pCtx.lineCap = 'round';
         
-        // 畫一條對角線
         pCtx.beginPath();
         pCtx.moveTo(0, size);
         pCtx.lineTo(size, 0);
         pCtx.stroke();
         
-        // 為了讓接縫平滑，補上角落的線段
         pCtx.beginPath();
         pCtx.moveTo(-1, 1);
         pCtx.lineTo(1, -1);
@@ -98,7 +85,6 @@ function initPatterns() {
         pCtx.lineTo(size + 1, size - 1);
         pCtx.stroke();
 
-        // 3. 轉為 Canvas Pattern 物件
         const pattern = ctx.createPattern(pCanvas, 'repeat');
         HATCH_PATTERNS.push(pattern);
     }
@@ -118,6 +104,7 @@ function startGame() {
     updateScoreUI();
     toggleButtons(true);
     document.getElementById('pause-overlay').style.display = 'none';
+    document.getElementById('all-clear-message').classList.remove('show'); // 重置 All Clear
     document.getElementById('game-over-dialog').close();
 
     fillNextQueue();
@@ -207,25 +194,47 @@ function collide(arena, player) {
     return false;
 }
 
+// 矩陣旋轉演算法
+// dir = 1 (順時針), dir = -1 (逆時針), dir = 2 (180度)
 function rotate(matrix, dir) {
+    // 180度：旋轉兩次順時針
+    if (dir === 2) {
+        rotate(matrix, 1);
+        rotate(matrix, 1);
+        return;
+    }
+
+    // 轉置矩陣 (Transpose)
     for (let y = 0; y < matrix.length; ++y) {
         for (let x = 0; x < y; ++x) {
             [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
         }
     }
-    if (dir > 0) matrix.forEach(row => row.reverse());
-    else matrix.reverse();
+    
+    // 順時針：反轉每一列
+    if (dir > 0) {
+        matrix.forEach(row => row.reverse());
+    } 
+    // 逆時針：反轉矩陣行順序
+    else {
+        matrix.reverse();
+    }
 }
 
 function playerRotate(dir) {
     const pos = player.pos.x;
     let offset = 1;
+    
     rotate(player.matrix, dir);
+    
+    // 簡單的 Wall Kick 測試
+    // 180度旋轉可能需要嘗試更多次 kick，這裡沿用簡單邏輯
     while (collide(board, player)) {
         player.pos.x += offset;
         offset = -(offset + (offset > 0 ? 1 : -1));
         if (offset > player.matrix[0].length) {
-            rotate(player.matrix, -dir);
+            // 失敗，轉回去 (注意 180 度失敗轉回去也是轉 180 或 -2)
+            rotate(player.matrix, dir === 2 ? 2 : -dir);
             player.pos.x = pos;
             return;
         }
@@ -248,6 +257,17 @@ function triggerShake() {
     layout.classList.remove('shake');
     void layout.offsetWidth;
     layout.classList.add('shake');
+}
+
+function showAllClear() {
+    const msg = document.getElementById('all-clear-message');
+    msg.classList.remove('show');
+    void msg.offsetWidth; // Reset animation
+    msg.classList.add('show');
+    
+    // All Clear 獎勵分
+    score += 2000 * level;
+    updateScoreUI();
 }
 
 function playerHardDrop() {
@@ -300,6 +320,7 @@ function arenaSweep() {
         draw(); 
 
         setTimeout(() => {
+            // 移除行
             rowsToClear.forEach(() => {
                 for(let y = board.length - 1; y >= 0; y--) {
                     if (board[y][0] === 9) {
@@ -309,6 +330,23 @@ function arenaSweep() {
                     }
                 }
             });
+
+            // --- All Clear 檢查 ---
+            // 檢查盤面是否還有非0的格子
+            let isAllClear = true;
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (board[y][x] !== 0) {
+                        isAllClear = false;
+                        break;
+                    }
+                }
+                if (!isAllClear) break;
+            }
+            
+            if (isAllClear) {
+                showAllClear();
+            }
 
             const lineScores = [0, 100, 300, 500, 800];
             score += lineScores[rowsToClear.length] * level;
@@ -355,7 +393,6 @@ function draw() {
     drawHold();
 }
 
-// --- 修改：繪製方塊函式 (支援色鉛筆紋理) ---
 function drawMatrix(matrix, offset, context) {
     matrix.forEach((row, y) => {
         row.forEach((value, x) => {
@@ -363,37 +400,27 @@ function drawMatrix(matrix, offset, context) {
                 const px = (x + offset.x) * BLOCK_SIZE;
                 const py = (y + offset.y) * BLOCK_SIZE;
                 
-                // 9 是消除閃爍用的白色
                 if (value === 9) {
                     context.fillStyle = '#ffffff';
                     context.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
                     return;
                 }
 
-                // 1. 繪製底色 (半透明) - 模擬塗色不均勻的感覺
-                context.fillStyle = COLORS[value] + '44'; // Hex + 44 (約25%透明度)
+                context.fillStyle = COLORS[value] + '44'; 
                 context.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
 
-                // 2. 繪製斜線紋理 (筆觸)
                 if (HATCH_PATTERNS[value]) {
                     context.fillStyle = HATCH_PATTERNS[value];
-                    // 為了防止紋理隨著方塊移動而「滾動」，我們需要對齊 Pattern
-                    // (不過 Canvas Pattern 預設是基於原點的，所以這裡直接填滿即可，移動時紋理看起來會固定在畫布上，這正是我們要的紙張效果)
-                    // 如果希望紋理跟著方塊走，需要 translate context，但紙張效果通常紋理是靜止的比較像
-                    
-                    // 這裡我們讓紋理跟著方塊走，看起來比較像方塊自己有花紋
                     context.save();
                     context.translate(px, py); 
                     context.fillRect(0, 0, BLOCK_SIZE, BLOCK_SIZE);
                     context.restore();
                 }
 
-                // 3. 繪製邊框
-                context.strokeStyle = 'rgba(0,0,0,0.3)'; // 稍微深一點的邊框
+                context.strokeStyle = 'rgba(0,0,0,0.3)';
                 context.lineWidth = 1;
                 context.strokeRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
 
-                // 4. 高光 (簡化，保持平面感)
                 context.fillStyle = 'rgba(255,255,255,0.3)';
                 context.fillRect(px, py, BLOCK_SIZE, 2);
             }
@@ -464,7 +491,7 @@ function handleInput(event) {
     if (isAnimating) return;
     if (isGameOver && event.keyCode !== 27) return;
 
-    if (event.keyCode === 27) { 
+    if (event.keyCode === 27) { // ESC
         if (!document.getElementById('btn-end').disabled) {
             isPaused = !isPaused;
             const overlay = document.getElementById('pause-overlay');
@@ -481,24 +508,33 @@ function handleInput(event) {
     }
 
     if (isPaused) return;
-    if([32, 37, 38, 39, 40].includes(event.keyCode)) event.preventDefault();
+
+    // 禁用 IJKL 的預設行為 (如果有)
+    // 32(Space), 73(I), 74(J), 75(K), 76(L), 79(O), 85(U)
+    if([32, 73, 74, 75, 76, 79, 85].includes(event.keyCode)) event.preventDefault();
 
     switch(event.keyCode) {
-        case 37: // Left
+        case 74: // J (Left)
             player.pos.x--;
             if (collide(board, player)) player.pos.x++;
             break;
-        case 39: // Right
+        case 76: // L (Right)
             player.pos.x++;
             if (collide(board, player)) player.pos.x--;
             break;
-        case 40: // Down
+        case 75: // K (Down/Soft Drop)
             playerDrop();
             break;
-        case 38: // Up
+        case 73: // I (Rotate CW)
             playerRotate(1);
             break;
-        case 32: // Space
+        case 85: // U (Rotate CCW)
+            playerRotate(-1);
+            break;
+        case 79: // O (Rotate 180)
+            playerRotate(2);
+            break;
+        case 32: // Space (Hard Drop)
             playerHardDrop();
             break;
         case 16: // Shift

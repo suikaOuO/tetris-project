@@ -12,29 +12,23 @@
 </head>
 <body>
 
-<!-- 背景裝飾層 (新增部分) -->
+<!-- 背景裝飾層 -->
 <div id="bg-decoration">
-    <!-- I 形狀 -->
     <div class="bg-piece shape-i" style="--c: #22d3ee; top: 10%; left: 5%; animation-delay: 0s;">
         <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
     </div>
-    <!-- O 形狀 -->
     <div class="bg-piece shape-o" style="--c: #eab308; top: 15%; right: 10%; animation-delay: -2s;">
         <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
     </div>
-    <!-- T 形狀 -->
     <div class="bg-piece shape-t" style="--c: #a855f7; bottom: 15%; left: 8%; animation-delay: -4s;">
         <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
     </div>
-    <!-- L 形狀 -->
     <div class="bg-piece shape-l" style="--c: #f97316; bottom: 20%; right: 5%; animation-delay: -1s;">
         <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
     </div>
-    <!-- Z 形狀 -->
     <div class="bg-piece shape-z" style="--c: #ef4444; top: 50%; left: -5%; transform: scale(0.8); animation-delay: -3s;">
         <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
     </div>
-     <!-- J 形狀 (模糊遠景) -->
      <div class="bg-piece shape-j" style="--c: #3b82f6; top: 5%; left: 40%; filter: blur(2px); opacity: 0.4; transform: scale(0.6); animation-delay: -5s;">
         <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
     </div>
@@ -50,10 +44,13 @@
         
         <div class="controls-info">
             <div class="key-row"><span class="key-badge">Shift</span> <span>暫存</span></div>
-            <div class="key-row"><span class="key-badge">ESC</span> <span>暫停</span></div>
             <div class="key-row"><span class="key-badge">Space</span> <span>直接落下</span></div>
-            <div class="key-row"><span class="key-badge">↑</span> <span>旋轉</span></div>
-            <div class="key-row"><span class="key-badge">←↓→</span> <span>移動</span></div>
+            <div class="key-row"><span class="key-badge">J</span><span class="key-badge">L</span> <span>左右移動</span></div>
+            <div class="key-row"><span class="key-badge">K</span> <span>軟降</span></div>
+            <div class="key-row"><span class="key-badge">I</span> <span>順時轉</span></div>
+            <div class="key-row"><span class="key-badge">U</span> <span>逆時轉</span></div>
+            <div class="key-row"><span class="key-badge">O</span> <span>180轉</span></div>
+            <div class="key-row"><span class="key-badge">ESC</span> <span>暫停</span></div>
         </div>
     </div>
 
@@ -61,6 +58,9 @@
     <div style="position: relative;">
         <canvas id="main-canvas" width="300" height="600"></canvas>
         
+        <!-- All Clear 特效文字 -->
+        <div id="all-clear-message">ALL CLEAR!</div>
+
         <div id="pause-overlay">
             <div style="font-size: 3rem; transform: rotate(-5deg);">PAUSED</div>
             <div style="font-size: 1.2rem; margin-top: 10px;">按 ESC 繼續塗鴉</div>
