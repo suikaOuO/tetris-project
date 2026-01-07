@@ -1,5 +1,5 @@
 /* ==========================================
-   TETRIS 遊戲核心邏輯 (消除震動版)
+   TETRIS 遊戲核心邏輯 (色鉛筆紋理版)
    ========================================== */
 
 const COLS = 10;
@@ -16,7 +16,7 @@ const PIECES = {
     'Z': [[7,7,0], [0,7,7], [0,0,0]]
 };
 
-// 顏色設定
+// 顏色 (維持鮮豔度)
 const COLORS = [
     null,
     '#22d3ee', // I
@@ -36,6 +36,9 @@ let isPaused = false, isGameOver = false, requestId = null;
 let bag = [], nextQueue = [], holdPiece = null, canHold = true;
 let isAnimating = false;
 
+// 儲存生成的紋理圖案 (Patterns)
+let HATCH_PATTERNS = [];
+
 let player = { pos: {x: 0, y: 0}, matrix: null, type: null };
 
 window.onload = function() {
@@ -46,6 +49,9 @@ window.onload = function() {
     holdCanvas = document.getElementById('hold-canvas');
     holdCtx = holdCanvas.getContext('2d');
 
+    // 初始化紋理
+    initPatterns();
+
     document.getElementById('btn-start').addEventListener('click', startGame);
     document.getElementById('btn-end').addEventListener('click', endGame);
     document.addEventListener('keydown', handleInput);
@@ -53,6 +59,50 @@ window.onload = function() {
     resetBoard();
     draw(); 
 };
+
+// --- 新增：初始化色鉛筆紋理 ---
+function initPatterns() {
+    HATCH_PATTERNS = [null]; // 索引 0 是空的
+
+    // 為 COLORS 裡的每個顏色生成紋理
+    for (let i = 1; i < COLORS.length; i++) {
+        const color = COLORS[i];
+        
+        // 1. 創建一個微型 Canvas 來繪製圖案單元
+        const pCanvas = document.createElement('canvas');
+        // 設定紋理密度：數值越小越密。背景大約是 15px，這裡我們設為 6px
+        const size = 6; 
+        pCanvas.width = size;
+        pCanvas.height = size;
+        const pCtx = pCanvas.getContext('2d');
+
+        // 2. 繪製斜線 (模擬筆觸)
+        pCtx.strokeStyle = color;
+        pCtx.lineWidth = 1.5; // 筆觸粗細
+        pCtx.lineCap = 'round'; // 圓頭筆觸較自然
+        
+        // 畫一條對角線
+        pCtx.beginPath();
+        pCtx.moveTo(0, size);
+        pCtx.lineTo(size, 0);
+        pCtx.stroke();
+        
+        // 為了讓接縫平滑，補上角落的線段
+        pCtx.beginPath();
+        pCtx.moveTo(-1, 1);
+        pCtx.lineTo(1, -1);
+        pCtx.stroke();
+
+        pCtx.beginPath();
+        pCtx.moveTo(size - 1, size + 1);
+        pCtx.lineTo(size + 1, size - 1);
+        pCtx.stroke();
+
+        // 3. 轉為 Canvas Pattern 物件
+        const pattern = ctx.createPattern(pCanvas, 'repeat');
+        HATCH_PATTERNS.push(pattern);
+    }
+}
 
 function startGame() {
     if (requestId) cancelAnimationFrame(requestId);
@@ -125,7 +175,6 @@ function fillNextQueue() {
 }
 
 function getPieceMatrix(type) {
-    // 深拷貝矩陣，避免旋轉影響原始定義
     return PIECES[type].map(row => [...row]);
 }
 
@@ -194,12 +243,10 @@ function playerDrop() {
     dropCounter = 0;
 }
 
-// 觸發震動特效
 function triggerShake() {
     const layout = document.getElementById('game-layout');
-    // 重置動畫以允許重複觸發
     layout.classList.remove('shake');
-    void layout.offsetWidth; // 強制重繪
+    void layout.offsetWidth;
     layout.classList.add('shake');
 }
 
@@ -210,9 +257,6 @@ function playerHardDrop() {
     player.pos.y--;
     merge(board, player);
     score += 20;
-    
-    // --- 修改處：移除此處的 triggerShake() ---
-    
     arenaSweep();
     if (!isAnimating) playerReset();
     dropCounter = 0;
@@ -248,18 +292,14 @@ function arenaSweep() {
 
     if (rowsToClear.length > 0) {
         isAnimating = true;
-        
-        // --- 修改處：只有在確認消除行時才觸發震動 ---
         triggerShake();
 
-        // 閃爍效果 (白色標記)
         rowsToClear.forEach(y => {
             board[y].fill(9); 
         });
         draw(); 
 
         setTimeout(() => {
-            // 實際移除
             rowsToClear.forEach(() => {
                 for(let y = board.length - 1; y >= 0; y--) {
                     if (board[y][0] === 9) {
@@ -270,7 +310,6 @@ function arenaSweep() {
                 }
             });
 
-            // 計分
             const lineScores = [0, 100, 300, 500, 800];
             score += lineScores[rowsToClear.length] * level;
             lines += rowsToClear.length;
@@ -295,9 +334,7 @@ function playerHold() {
         const temp = player.type;
         player.type = holdPiece;
         holdPiece = temp;
-        
         player.matrix = getPieceMatrix(player.type);
-        
         player.pos.y = 0;
         player.pos.x = (COLS / 2 | 0) - (Math.ceil(player.matrix[0].length / 2));
         if (collide(board, player)) endGame();
@@ -318,6 +355,7 @@ function draw() {
     drawHold();
 }
 
+// --- 修改：繪製方塊函式 (支援色鉛筆紋理) ---
 function drawMatrix(matrix, offset, context) {
     matrix.forEach((row, y) => {
         row.forEach((value, x) => {
@@ -325,23 +363,39 @@ function drawMatrix(matrix, offset, context) {
                 const px = (x + offset.x) * BLOCK_SIZE;
                 const py = (y + offset.y) * BLOCK_SIZE;
                 
-                // 白色閃爍效果
+                // 9 是消除閃爍用的白色
                 if (value === 9) {
                     context.fillStyle = '#ffffff';
                     context.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
                     return;
                 }
 
-                context.fillStyle = COLORS[value];
+                // 1. 繪製底色 (半透明) - 模擬塗色不均勻的感覺
+                context.fillStyle = COLORS[value] + '44'; // Hex + 44 (約25%透明度)
                 context.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
-                
-                context.strokeStyle = 'rgba(0,0,0,0.2)';
+
+                // 2. 繪製斜線紋理 (筆觸)
+                if (HATCH_PATTERNS[value]) {
+                    context.fillStyle = HATCH_PATTERNS[value];
+                    // 為了防止紋理隨著方塊移動而「滾動」，我們需要對齊 Pattern
+                    // (不過 Canvas Pattern 預設是基於原點的，所以這裡直接填滿即可，移動時紋理看起來會固定在畫布上，這正是我們要的紙張效果)
+                    // 如果希望紋理跟著方塊走，需要 translate context，但紙張效果通常紋理是靜止的比較像
+                    
+                    // 這裡我們讓紋理跟著方塊走，看起來比較像方塊自己有花紋
+                    context.save();
+                    context.translate(px, py); 
+                    context.fillRect(0, 0, BLOCK_SIZE, BLOCK_SIZE);
+                    context.restore();
+                }
+
+                // 3. 繪製邊框
+                context.strokeStyle = 'rgba(0,0,0,0.3)'; // 稍微深一點的邊框
                 context.lineWidth = 1;
                 context.strokeRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
 
-                context.fillStyle = 'rgba(255,255,255,0.4)';
-                context.fillRect(px, py, BLOCK_SIZE, 3);
-                context.fillRect(px, py, 3, BLOCK_SIZE);
+                // 4. 高光 (簡化，保持平面感)
+                context.fillStyle = 'rgba(255,255,255,0.3)';
+                context.fillRect(px, py, BLOCK_SIZE, 2);
             }
         });
     });
