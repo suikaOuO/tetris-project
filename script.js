@@ -1,13 +1,11 @@
 /* ==========================================
-   TETRIS 遊戲核心邏輯
+   TETRIS 遊戲核心邏輯 (美化版)
    ========================================== */
 
 const COLS = 10;
 const ROWS = 20;
-const BLOCK_SIZE = 30; // 配合 CSS background-size: 30px
+const BLOCK_SIZE = 30;
 
-// 定義方塊 (I, J, L, O, S, T, Z)
-// 這是原始定義，絕對不能被修改
 const PIECES = {
     'I': [[0,0,0,0], [1,1,1,1], [0,0,0,0], [0,0,0,0]],
     'J': [[2,0,0], [2,2,2], [0,0,0]],
@@ -18,25 +16,26 @@ const PIECES = {
     'Z': [[7,7,0], [0,7,7], [0,0,0]]
 };
 
-// 顏色定義
+// 顏色更鮮豔一點，像麥克筆
 const COLORS = [
     null,
-    '#06b6d4', // I - Cyan
-    '#3b82f6', // J - Blue
-    '#f97316', // L - Orange
-    '#eab308', // O - Yellow
-    '#22c55e', // S - Green
-    '#a855f7', // T - Purple
-    '#ef4444'  // Z - Red
+    '#22d3ee', // I
+    '#3b82f6', // J
+    '#f97316', // L
+    '#eab308', // O
+    '#22c55e', // S
+    '#a855f7', // T
+    '#ef4444'  // Z
 ];
 
-// 遊戲狀態
 let canvas, ctx, nextCanvas, nextCtx, holdCanvas, holdCtx;
 let board = [];
 let score = 0, lines = 0, level = 1;
 let dropCounter = 0, dropInterval = 1000, lastTime = 0;
 let isPaused = false, isGameOver = false, requestId = null;
 let bag = [], nextQueue = [], holdPiece = null, canHold = true;
+// 新增：動畫狀態標記
+let isAnimating = false;
 
 let player = { pos: {x: 0, y: 0}, matrix: null, type: null };
 
@@ -63,6 +62,7 @@ function startGame() {
     score = 0; lines = 0; level = 1;
     dropInterval = 1000;
     isPaused = false; isGameOver = false;
+    isAnimating = false;
     
     bag = []; nextQueue = []; holdPiece = null; canHold = true;
     
@@ -108,7 +108,6 @@ function resetBoard() {
     board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
 }
 
-// 7-Bag Randomizer
 function generatePiece() {
     if (bag.length === 0) {
         bag = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
@@ -126,9 +125,7 @@ function fillNextQueue() {
     }
 }
 
-// === 核心修正處：取得方塊矩陣的複本 ===
 function getPieceMatrix(type) {
-    // 使用 map 進行深拷貝 (Deep Copy)，確保不修改原始 PIECES 定義
     return PIECES[type].map(row => [...row]);
 }
 
@@ -137,10 +134,8 @@ function playerReset() {
     const type = nextQueue.shift();
     fillNextQueue();
 
-    // 修正：這裡改用 getPieceMatrix 取得複本
     player.matrix = getPieceMatrix(type);
     player.type = type;
-    
     player.pos.y = 0;
     player.pos.x = (COLS / 2 | 0) - (Math.ceil(player.matrix[0].length / 2));
 
@@ -176,10 +171,7 @@ function rotate(matrix, dir) {
 function playerRotate(dir) {
     const pos = player.pos.x;
     let offset = 1;
-    
-    // 這裡旋轉的是 player.matrix (複本)，所以不會影響 PIECES
     rotate(player.matrix, dir);
-    
     while (collide(board, player)) {
         player.pos.x += offset;
         offset = -(offset + (offset > 0 ? 1 : -1));
@@ -196,10 +188,18 @@ function playerDrop() {
     if (collide(board, player)) {
         player.pos.y--;
         merge(board, player);
-        arenaSweep();
-        playerReset();
+        arenaSweep(); // 這裡會處理消除動畫
+        if (!isAnimating) playerReset(); // 如果有動畫，等待動畫結束再生成
     }
     dropCounter = 0;
+}
+
+// 觸發震動特效
+function triggerShake() {
+    const layout = document.getElementById('game-layout');
+    layout.classList.remove('shake');
+    void layout.offsetWidth; // 觸發重繪
+    layout.classList.add('shake');
 }
 
 function playerHardDrop() {
@@ -209,8 +209,9 @@ function playerHardDrop() {
     player.pos.y--;
     merge(board, player);
     score += 20;
+    triggerShake(); // Hard Drop 加入震動
     arenaSweep();
-    playerReset();
+    if (!isAnimating) playerReset();
     dropCounter = 0;
 }
 
@@ -226,29 +227,69 @@ function merge(arena, player) {
     });
 }
 
+// 修改：加入簡單的消除閃爍邏輯
 function arenaSweep() {
-    let rowCount = 0;
-    outer: for (let y = ROWS - 1; y >= 0; --y) {
+    let rowsToClear = [];
+    
+    // 1. 找出需要消除的行
+    for (let y = ROWS - 1; y >= 0; --y) {
+        let isFull = true;
         for (let x = 0; x < COLS; ++x) {
-            if (board[y][x] === 0) continue outer;
+            if (board[y][x] === 0) {
+                isFull = false;
+                break;
+            }
         }
-        const row = board.splice(y, 1)[0].fill(0);
-        board.unshift(row);
-        ++y;
-        rowCount++;
+        if (isFull) {
+            rowsToClear.push(y);
+        }
     }
-    if (rowCount > 0) {
-        const lineScores = [0, 100, 300, 500, 800];
-        score += lineScores[rowCount] * level;
-        lines += rowCount;
-        level = Math.floor(lines / 10) + 1;
-        dropInterval = Math.max(100, 1000 - (level - 1) * 100);
-        updateScoreUI();
+
+    if (rowsToClear.length > 0) {
+        isAnimating = true;
+        
+        // 2. 閃爍效果：暫時把這些行變白色 (color index 0 or special)
+        // 為了簡單，我們直接在 drawMatrix 裡動手腳，或是短暫停止更新
+        // 這裡用一個簡單的 timeout 模擬動畫
+        
+        // 標記這些行 (用特殊數字，例如 9 代表閃爍)
+        rowsToClear.forEach(y => {
+            board[y].fill(9); 
+        });
+        draw(); // 重繪顯示白色行
+
+        setTimeout(() => {
+            // 3. 實際消除資料
+            rowsToClear.forEach(() => {
+                // 由於我們剛才把行變成 9 了，現在要刪除這些行
+                // 注意：因為 rowsToClear 紀錄的是原始索引，但我們用 splice 會改變索引
+                // 所以最簡單的方法是重新掃描一次 board 移除所有包含 9 的行
+                for(let y = board.length - 1; y >= 0; y--) {
+                    if (board[y][0] === 9) { // 檢查是否為標記行
+                        board.splice(y, 1);
+                        board.unshift(new Array(COLS).fill(0));
+                        y++; // 保持索引正確
+                    }
+                }
+            });
+
+            // 4. 計算分數
+            const lineScores = [0, 100, 300, 500, 800];
+            score += lineScores[rowsToClear.length] * level;
+            lines += rowsToClear.length;
+            level = Math.floor(lines / 10) + 1;
+            dropInterval = Math.max(100, 1000 - (level - 1) * 100);
+            updateScoreUI();
+
+            isAnimating = false;
+            playerReset(); // 動畫結束後生成新方塊
+            draw();
+        }, 150); // 150ms 閃爍時間
     }
 }
 
 function playerHold() {
-    if (!canHold || isPaused || isGameOver) return;
+    if (!canHold || isPaused || isGameOver || isAnimating) return;
     
     if (holdPiece === null) {
         holdPiece = player.type;
@@ -258,7 +299,6 @@ function playerHold() {
         player.type = holdPiece;
         holdPiece = temp;
         
-        // 修正：交換出來的方塊也要使用複本
         player.matrix = getPieceMatrix(player.type);
         
         player.pos.y = 0;
@@ -268,14 +308,14 @@ function playerHold() {
     canHold = false;
 }
 
-/* --- 渲染 --- */
-
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawMatrix(board, {x: 0, y: 0}, ctx);
     
-    if (!isGameOver && player.matrix) drawGhost();
-    if (!isGameOver && player.matrix) drawMatrix(player.matrix, player.pos, ctx);
+    if (!isGameOver && !isAnimating && player.matrix) {
+        drawGhost();
+        drawMatrix(player.matrix, player.pos, ctx);
+    }
 
     drawNext();
     drawHold();
@@ -288,16 +328,24 @@ function drawMatrix(matrix, offset, context) {
                 const px = (x + offset.x) * BLOCK_SIZE;
                 const py = (y + offset.y) * BLOCK_SIZE;
                 
+                // 9 代表消除動畫中的白色閃爍
+                if (value === 9) {
+                    context.fillStyle = '#ffffff';
+                    context.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
+                    return;
+                }
+
                 context.fillStyle = COLORS[value];
                 context.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
                 
-                context.strokeStyle = 'rgba(0,0,0,0.15)';
+                context.strokeStyle = 'rgba(0,0,0,0.2)'; // 加深邊框
                 context.lineWidth = 1;
                 context.strokeRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
 
-                context.fillStyle = 'rgba(255,255,255,0.3)';
-                context.fillRect(px, py, BLOCK_SIZE, 3);
-                context.fillRect(px, py, 3, BLOCK_SIZE);
+                // 亮面細節 (讓它看起來像有厚度的紙或貼紙)
+                context.fillStyle = 'rgba(255,255,255,0.4)';
+                context.fillRect(px, py, BLOCK_SIZE, 3); // Top highlight
+                context.fillRect(px, py, 3, BLOCK_SIZE); // Left highlight
             }
         });
     });
@@ -314,9 +362,12 @@ function drawGhost() {
                 const px = (x + ghost.pos.x) * BLOCK_SIZE;
                 const py = (y + ghost.pos.y) * BLOCK_SIZE;
                 context = ctx;
+                // 虛線風格
+                context.setLineDash([4, 2]);
                 context.lineWidth = 2;
                 context.strokeStyle = COLORS[value];
                 context.strokeRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
+                context.setLineDash([]); // Reset
             }
         });
     });
@@ -324,10 +375,8 @@ function drawGhost() {
 
 function drawNext() {
     nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
-    let offsetY = 1;
     for(let i=0; i<3; i++) {
         if(nextQueue[i]) {
-            // 這裡直接讀取 PIECES (原始定義)，因為 player 已經用複本操作，所以這裡永遠是初始狀態
             const m = PIECES[nextQueue[i]];
             const offsetX = (4 - m[0].length) / 2;
             const targetY = i * 4 + 1; 
@@ -339,7 +388,6 @@ function drawNext() {
 function drawHold() {
     holdCtx.clearRect(0, 0, holdCanvas.width, holdCanvas.height);
     if (holdPiece) {
-        // 同理，讀取 PIECES 原始定義
         const m = PIECES[holdPiece];
         const offsetX = (4 - m[0].length) / 2;
         const offsetY = (4 - m.length) / 2; 
@@ -352,15 +400,21 @@ function update(time = 0) {
     const deltaTime = time - lastTime;
     lastTime = time;
 
-    dropCounter += deltaTime;
-    if (dropCounter > dropInterval) {
-        playerDrop();
+    // 如果正在播放動畫，不執行落下邏輯
+    if (!isAnimating) {
+        dropCounter += deltaTime;
+        if (dropCounter > dropInterval) {
+            playerDrop();
+        }
     }
+    
     draw();
     requestId = requestAnimationFrame(update);
 }
 
 function handleInput(event) {
+    // 動畫期間鎖定操作
+    if (isAnimating) return;
     if (isGameOver && event.keyCode !== 27) return;
 
     if (event.keyCode === 27) { // ESC
@@ -380,7 +434,6 @@ function handleInput(event) {
     }
 
     if (isPaused) return;
-
     if([32, 37, 38, 39, 40].includes(event.keyCode)) event.preventDefault();
 
     switch(event.keyCode) {
