@@ -1,5 +1,5 @@
 /* ==========================================
-   TETRIS 遊戲核心邏輯 (美化版)
+   TETRIS 遊戲核心邏輯 (消除震動版)
    ========================================== */
 
 const COLS = 10;
@@ -16,7 +16,7 @@ const PIECES = {
     'Z': [[7,7,0], [0,7,7], [0,0,0]]
 };
 
-// 顏色更鮮豔一點，像麥克筆
+// 顏色設定
 const COLORS = [
     null,
     '#22d3ee', // I
@@ -34,7 +34,6 @@ let score = 0, lines = 0, level = 1;
 let dropCounter = 0, dropInterval = 1000, lastTime = 0;
 let isPaused = false, isGameOver = false, requestId = null;
 let bag = [], nextQueue = [], holdPiece = null, canHold = true;
-// 新增：動畫狀態標記
 let isAnimating = false;
 
 let player = { pos: {x: 0, y: 0}, matrix: null, type: null };
@@ -126,6 +125,7 @@ function fillNextQueue() {
 }
 
 function getPieceMatrix(type) {
+    // 深拷貝矩陣，避免旋轉影響原始定義
     return PIECES[type].map(row => [...row]);
 }
 
@@ -188,8 +188,8 @@ function playerDrop() {
     if (collide(board, player)) {
         player.pos.y--;
         merge(board, player);
-        arenaSweep(); // 這裡會處理消除動畫
-        if (!isAnimating) playerReset(); // 如果有動畫，等待動畫結束再生成
+        arenaSweep(); 
+        if (!isAnimating) playerReset();
     }
     dropCounter = 0;
 }
@@ -197,8 +197,9 @@ function playerDrop() {
 // 觸發震動特效
 function triggerShake() {
     const layout = document.getElementById('game-layout');
+    // 重置動畫以允許重複觸發
     layout.classList.remove('shake');
-    void layout.offsetWidth; // 觸發重繪
+    void layout.offsetWidth; // 強制重繪
     layout.classList.add('shake');
 }
 
@@ -209,7 +210,9 @@ function playerHardDrop() {
     player.pos.y--;
     merge(board, player);
     score += 20;
-    triggerShake(); // Hard Drop 加入震動
+    
+    // --- 修改處：移除此處的 triggerShake() ---
+    
     arenaSweep();
     if (!isAnimating) playerReset();
     dropCounter = 0;
@@ -227,11 +230,9 @@ function merge(arena, player) {
     });
 }
 
-// 修改：加入簡單的消除閃爍邏輯
 function arenaSweep() {
     let rowsToClear = [];
     
-    // 1. 找出需要消除的行
     for (let y = ROWS - 1; y >= 0; --y) {
         let isFull = true;
         for (let x = 0; x < COLS; ++x) {
@@ -248,32 +249,28 @@ function arenaSweep() {
     if (rowsToClear.length > 0) {
         isAnimating = true;
         
-        // 2. 閃爍效果：暫時把這些行變白色 (color index 0 or special)
-        // 為了簡單，我們直接在 drawMatrix 裡動手腳，或是短暫停止更新
-        // 這裡用一個簡單的 timeout 模擬動畫
-        
-        // 標記這些行 (用特殊數字，例如 9 代表閃爍)
+        // --- 修改處：只有在確認消除行時才觸發震動 ---
+        triggerShake();
+
+        // 閃爍效果 (白色標記)
         rowsToClear.forEach(y => {
             board[y].fill(9); 
         });
-        draw(); // 重繪顯示白色行
+        draw(); 
 
         setTimeout(() => {
-            // 3. 實際消除資料
+            // 實際移除
             rowsToClear.forEach(() => {
-                // 由於我們剛才把行變成 9 了，現在要刪除這些行
-                // 注意：因為 rowsToClear 紀錄的是原始索引，但我們用 splice 會改變索引
-                // 所以最簡單的方法是重新掃描一次 board 移除所有包含 9 的行
                 for(let y = board.length - 1; y >= 0; y--) {
-                    if (board[y][0] === 9) { // 檢查是否為標記行
+                    if (board[y][0] === 9) {
                         board.splice(y, 1);
                         board.unshift(new Array(COLS).fill(0));
-                        y++; // 保持索引正確
+                        y++;
                     }
                 }
             });
 
-            // 4. 計算分數
+            // 計分
             const lineScores = [0, 100, 300, 500, 800];
             score += lineScores[rowsToClear.length] * level;
             lines += rowsToClear.length;
@@ -282,9 +279,9 @@ function arenaSweep() {
             updateScoreUI();
 
             isAnimating = false;
-            playerReset(); // 動畫結束後生成新方塊
+            playerReset();
             draw();
-        }, 150); // 150ms 閃爍時間
+        }, 150);
     }
 }
 
@@ -328,7 +325,7 @@ function drawMatrix(matrix, offset, context) {
                 const px = (x + offset.x) * BLOCK_SIZE;
                 const py = (y + offset.y) * BLOCK_SIZE;
                 
-                // 9 代表消除動畫中的白色閃爍
+                // 白色閃爍效果
                 if (value === 9) {
                     context.fillStyle = '#ffffff';
                     context.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
@@ -338,14 +335,13 @@ function drawMatrix(matrix, offset, context) {
                 context.fillStyle = COLORS[value];
                 context.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
                 
-                context.strokeStyle = 'rgba(0,0,0,0.2)'; // 加深邊框
+                context.strokeStyle = 'rgba(0,0,0,0.2)';
                 context.lineWidth = 1;
                 context.strokeRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
 
-                // 亮面細節 (讓它看起來像有厚度的紙或貼紙)
                 context.fillStyle = 'rgba(255,255,255,0.4)';
-                context.fillRect(px, py, BLOCK_SIZE, 3); // Top highlight
-                context.fillRect(px, py, 3, BLOCK_SIZE); // Left highlight
+                context.fillRect(px, py, BLOCK_SIZE, 3);
+                context.fillRect(px, py, 3, BLOCK_SIZE);
             }
         });
     });
@@ -362,12 +358,11 @@ function drawGhost() {
                 const px = (x + ghost.pos.x) * BLOCK_SIZE;
                 const py = (y + ghost.pos.y) * BLOCK_SIZE;
                 context = ctx;
-                // 虛線風格
                 context.setLineDash([4, 2]);
                 context.lineWidth = 2;
                 context.strokeStyle = COLORS[value];
                 context.strokeRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
-                context.setLineDash([]); // Reset
+                context.setLineDash([]);
             }
         });
     });
@@ -400,7 +395,6 @@ function update(time = 0) {
     const deltaTime = time - lastTime;
     lastTime = time;
 
-    // 如果正在播放動畫，不執行落下邏輯
     if (!isAnimating) {
         dropCounter += deltaTime;
         if (dropCounter > dropInterval) {
@@ -413,11 +407,10 @@ function update(time = 0) {
 }
 
 function handleInput(event) {
-    // 動畫期間鎖定操作
     if (isAnimating) return;
     if (isGameOver && event.keyCode !== 27) return;
 
-    if (event.keyCode === 27) { // ESC
+    if (event.keyCode === 27) { 
         if (!document.getElementById('btn-end').disabled) {
             isPaused = !isPaused;
             const overlay = document.getElementById('pause-overlay');
