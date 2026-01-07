@@ -12,7 +12,34 @@
 </head>
 <body>
 
-<!-- 加入 shake-container 用於震動特效 -->
+<!-- 背景裝飾層 (新增部分) -->
+<div id="bg-decoration">
+    <!-- I 形狀 -->
+    <div class="bg-piece shape-i" style="--c: #22d3ee; top: 10%; left: 5%; animation-delay: 0s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+    <!-- O 形狀 -->
+    <div class="bg-piece shape-o" style="--c: #eab308; top: 15%; right: 10%; animation-delay: -2s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+    <!-- T 形狀 -->
+    <div class="bg-piece shape-t" style="--c: #a855f7; bottom: 15%; left: 8%; animation-delay: -4s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+    <!-- L 形狀 -->
+    <div class="bg-piece shape-l" style="--c: #f97316; bottom: 20%; right: 5%; animation-delay: -1s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+    <!-- Z 形狀 -->
+    <div class="bg-piece shape-z" style="--c: #ef4444; top: 50%; left: -5%; transform: scale(0.8); animation-delay: -3s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+     <!-- J 形狀 (模糊遠景) -->
+     <div class="bg-piece shape-j" style="--c: #3b82f6; top: 5%; left: 40%; filter: blur(2px); opacity: 0.4; transform: scale(0.6); animation-delay: -5s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+</div>
+
 <div id="game-layout">
     <!-- 左側面板 -->
     <div class="side-panel">
