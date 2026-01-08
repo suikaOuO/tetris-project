@@ -1,5 +1,5 @@
 /* ==========================================
-   TETRIS 遊戲核心邏輯 (All Clear + IJKL版 + 鎖定延遲)
+   TETRIS 遊戲核心邏輯 (All Clear + IJKL版 + 鎖定延遲修正版)
    ========================================== */
 
 const COLS = 10;
@@ -152,6 +152,7 @@ function resetBoard() {
 function generatePiece() {
     if (bag.length === 0) {
         bag = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+        // Fisher-Yates Shuffle
         for (let i = bag.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [bag[i], bag[j]] = [bag[j], bag[i]];
@@ -217,12 +218,17 @@ function rotate(matrix, dir) {
     else matrix.reverse();
 }
 
-// 重置鎖定計時器 (Infinity Rule)
+// 重置鎖定計時器 (修正版：加入 else 清除邏輯)
 function resetLockTimer() {
-    // 只有在接觸地面/方塊時才重置計時
+    // 預先檢查下方是否有碰撞 (是否著地)
     player.pos.y++;
     if (collide(board, player)) {
+        // 如果著地，重置鎖定時間 (延長鎖定)
         lockStartTime = Date.now();
+    } else {
+        // 如果懸空 (例如滑出邊緣)，必須清除鎖定時間！
+        // 否則系統會以為還在地面，導致半空中鎖定
+        lockStartTime = null; 
     }
     player.pos.y--;
 }
@@ -232,15 +238,15 @@ function playerRotate(dir) {
     const row = player.pos.y;
     rotate(player.matrix, dir);
     
-    // 強化的 Wall Kick 判定 (包含 Floor Kick: [0, -1])
+    // Wall Kick & Floor Kick
     const kicks = [
         [0, 0],   // 原地
         [1, 0],   // 右移
         [-1, 0],  // 左移
-        [0, -1],  // 上移 (踢地) - 這是 T-Spin 關鍵
+        [0, -1],  // 上移 (踢地)
         [1, -1],  // 右上
         [-1, -1], // 左上
-        [2, 0],   // 右移2格 (I型方塊常用)
+        [2, 0],   // 右移2格
         [-2, 0]   // 左移2格
     ];
 
@@ -248,7 +254,7 @@ function playerRotate(dir) {
         player.pos.x = pos + ox;
         player.pos.y = row + oy;
         if (!collide(board, player)) {
-            resetLockTimer(); // 旋轉成功，重置鎖定時間
+            resetLockTimer(); // 旋轉成功，依據是否著地重置/清除計時
             return;
         }
     }
@@ -268,9 +274,6 @@ function playerDrop() {
         if (lockStartTime === null) {
             lockStartTime = Date.now(); // 開始計時
         }
-        // 注意：這裡不主動 merge，而是等待 update 迴圈檢查時間
-        // 或等待下一次 playerDrop (如果沒有 update 檢查)
-        // 為了反應更即時，主要鎖定邏輯移至 update 或此處判斷
         return; 
     }
     
@@ -420,9 +423,9 @@ function draw() {
     if (!isGameOver && !isAnimating && player.matrix) {
         drawGhost();
         
-        // 視覺提示：如果快要鎖定了，可以改變透明度或顏色 (選擇性)
+        // 視覺提示：如果快要鎖定了，可以改變透明度
         if (lockStartTime !== null) {
-            ctx.globalAlpha = 0.8; // 稍微透明一點表示落地
+            ctx.globalAlpha = 0.8; 
         }
         drawMatrix(player.matrix, player.pos, ctx);
         ctx.globalAlpha = 1.0;
@@ -522,7 +525,6 @@ function update(time = 0) {
         }
 
         // --- 獨立檢查鎖定延遲 ---
-        // 這樣即使 dropInterval 很長，也能在 0.5 秒後準時鎖定
         if (lockStartTime !== null) {
             if (Date.now() - lockStartTime > LOCK_DELAY) {
                 finalizeMove();
