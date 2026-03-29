@@ -1,5 +1,5 @@
 /* ==========================================
-   TETRIS 遊戲核心邏輯 (音效 + 特效 + 模式 + 排行榜)
+   TETRIS 遊戲核心邏輯 (選單 + 設定 + 音效 + 特效 + 電競級按鍵判定)
    ========================================== */
 
 const COLS = 10;
@@ -30,21 +30,27 @@ let HATCH_PATTERNS = [];
 let lockStartTime = null;
 let player = { pos: {x: 0, y: 0}, matrix: null, type: null };
 
-// --- 新增：遊戲模式與計時器 ---
-let currentMode = 'marathon'; // marathon, sprint, ultra
+// --- 遊戲模式與計時器 ---
+let currentMode = 'marathon';
 let gameStartTime = 0;
 let timeElapsed = 0;
-const ULTRA_TIME_LIMIT = 120000; // 2分鐘 = 120,000 毫秒
+const ULTRA_TIME_LIMIT = 120000;
 
-// --- 新增：視覺特效 (VFX) ---
 let particles = [];
+let audioCtx, isMuted = false, bgmInterval = null;
 
-// --- 新增：音訊系統 (Web Audio API) ---
-let audioCtx;
-let isMuted = false;
-let bgmOscillator = null;
-let bgmGain = null;
-let bgmInterval = null;
+// --- 按鍵設定與連續輸入系統 (DAS/ARR) ---
+const defaultKeybinds = {
+    left: 'KeyJ', right: 'KeyL', softDrop: 'KeyK', hardDrop: 'Space',
+    rotateCW: 'KeyI', rotateCCW: 'KeyU', rotate180: 'KeyO', hold: 'ShiftLeft'
+};
+let keybinds = JSON.parse(localStorage.getItem('tetrisKeys')) || {...defaultKeybinds};
+let listeningKeyAction = null;
+
+let keysPressed = {};
+let keyRepeatTimers = {};
+const DAS = 150; // 初次長按延遲 (毫秒)，大幅縮短判定時間
+const ARR = 30;  // 連續移動的間隔 (毫秒)，越小越快
 
 window.onload = function() {
     canvas = document.getElementById('main-canvas');
@@ -55,28 +61,45 @@ window.onload = function() {
     holdCtx = holdCanvas.getContext('2d');
 
     initPatterns();
-    loadLeaderboard();
+    updateControlsUI(); // 更新遊戲左側的按鍵提示
+    renderSettingsKeys(); // 繪製設定面板的按鈕
 
-    document.getElementById('btn-mute').addEventListener('click', toggleMute);
-    document.getElementById('btn-end').addEventListener('click', () => endGame(false));
+    // 全域鍵盤監聽
     document.addEventListener('keydown', handleInput);
-
-    resetBoard();
-    draw(); 
+    document.addEventListener('keyup', (event) => {
+        keysPressed[event.code] = false;
+    });
+    
+    // 初始化返回目錄狀態
+    document.getElementById('main-menu').style.display = 'flex';
+    document.getElementById('game-layout').style.display = 'none';
 };
 
-// ================= 排行榜系統 =================
-function loadLeaderboard() {
+// ================= 畫面切換與排行榜 =================
+function showMainMenu() {
+    document.getElementById('main-menu').style.display = 'flex';
+    document.getElementById('game-layout').style.display = 'none';
+    document.getElementById('pause-overlay').style.display = 'none';
+    document.getElementById('game-over-dialog').close();
+    stopBGM();
+}
+
+function updateLeaderboardUI() {
     const data = JSON.parse(localStorage.getItem('tetrisLeaderboard')) || { marathon: 0, sprint: 999999, ultra: 0 };
+    const modeNames = { marathon: '馬拉松模式', sprint: '40行衝刺', ultra: '2分鐘計時賽' };
     
-    document.getElementById('lb-marathon').innerText = data.marathon > 0 ? data.marathon + ' 分' : '-';
-    document.getElementById('lb-sprint').innerText = data.sprint < 999999 ? formatTime(data.sprint) : '-';
-    document.getElementById('lb-ultra').innerText = data.ultra > 0 ? data.ultra + ' 分' : '-';
-    return data;
+    document.getElementById('current-mode-name').innerText = modeNames[currentMode];
+    
+    let recordText = '-';
+    if (currentMode === 'marathon' && data.marathon > 0) recordText = `${data.marathon} 分`;
+    else if (currentMode === 'sprint' && data.sprint < 999999) recordText = formatTime(data.sprint);
+    else if (currentMode === 'ultra' && data.ultra > 0) recordText = `${data.ultra} 分`;
+
+    document.getElementById('current-mode-record').innerText = recordText;
 }
 
 function checkHighScore() {
-    const data = loadLeaderboard();
+    let data = JSON.parse(localStorage.getItem('tetrisLeaderboard')) || { marathon: 0, sprint: 999999, ultra: 0 };
     let isHigh = false;
     let recordStr = "";
 
@@ -92,7 +115,7 @@ function checkHighScore() {
         localStorage.setItem('tetrisLeaderboard', JSON.stringify(data));
         document.getElementById('new-record-box').style.display = 'block';
         document.getElementById('go-desc').innerText = `🔥 新的高分紀錄：${recordStr} 🔥`;
-        loadLeaderboard();
+        updateLeaderboardUI();
     } else {
         document.getElementById('new-record-box').style.display = 'none';
         let desc = currentMode === 'sprint' ? `時間: ${formatTime(timeElapsed)}` : `分數: ${score}`;
@@ -101,10 +124,79 @@ function checkHighScore() {
 }
 
 function saveAndReset() {
-    document.getElementById('game-over-dialog').close();
-    document.getElementById('start-menu-dialog').showModal();
-    resetBoard();
-    draw();
+    isPaused = false;
+    keysPressed = {};
+    showMainMenu();
+}
+
+// ================= 按鍵設定系統 =================
+const actionLabels = {
+    left: '向左移動', right: '向右移動', softDrop: '軟降 (加速)', hardDrop: '直接落下',
+    rotateCW: '順時針旋轉', rotateCCW: '逆時針旋轉', rotate180: '180度旋轉', hold: '方塊暫存'
+};
+
+function formatKeyName(code) {
+    if (code.startsWith('Key')) return code.slice(3);
+    if (code.startsWith('Digit')) return code.slice(5);
+    if (code.startsWith('Arrow')) {
+        const arr = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
+        return arr[code];
+    }
+    if (code === 'Space') return 'Space';
+    if (code.includes('Shift')) return 'Shift';
+    if (code.includes('Control')) return 'Ctrl';
+    if (code.includes('Alt')) return 'Alt';
+    return code;
+}
+
+function updateControlsUI() {
+    for (const [action, code] of Object.entries(keybinds)) {
+        const el = document.getElementById(`kb-${action}`);
+        if (el) el.innerText = formatKeyName(code);
+    }
+}
+
+function openSettings() {
+    renderSettingsKeys();
+    document.getElementById('settings-dialog').showModal();
+}
+
+function closeSettings() {
+    listeningKeyAction = null;
+    localStorage.setItem('tetrisKeys', JSON.stringify(keybinds));
+    updateControlsUI();
+    document.getElementById('settings-dialog').close();
+}
+
+function resetDefaultKeys() {
+    keybinds = {...defaultKeybinds};
+    renderSettingsKeys();
+}
+
+function renderSettingsKeys() {
+    const container = document.getElementById('keybinds-container');
+    container.innerHTML = '';
+    
+    for (const [action, code] of Object.entries(keybinds)) {
+        const div = document.createElement('div');
+        div.className = 'keybind-item';
+        div.innerHTML = `
+            <label>${actionLabels[action]}</label>
+            <button id="btn-key-${action}" class="keybind-btn" onclick="listenForKey('${action}')">
+                ${formatKeyName(code)}
+            </button>
+        `;
+        container.appendChild(div);
+    }
+}
+
+function listenForKey(action) {
+    document.querySelectorAll('.keybind-btn').forEach(b => b.classList.remove('listening'));
+    
+    listeningKeyAction = action;
+    const btn = document.getElementById(`btn-key-${action}`);
+    btn.classList.add('listening');
+    btn.innerText = '請按下按鍵...';
 }
 
 // ================= 音訊系統 =================
@@ -115,9 +207,11 @@ function initAudio() {
 
 function toggleMute() {
     isMuted = !isMuted;
-    document.getElementById('btn-mute').innerText = isMuted ? '🔈 聲音: 關' : '🔊 聲音: 開';
+    const txt = isMuted ? '🔈 聲音: 關' : '🔊 聲音: 開';
+    document.getElementById('btn-mute-menu').innerText = txt;
+    document.getElementById('btn-mute-game').innerText = txt;
     if (isMuted) stopBGM();
-    else if (!isGameOver && !isPaused) startBGM();
+    else if (!isGameOver && !isPaused && document.getElementById('game-layout').style.display !== 'none') startBGM();
 }
 
 function playTone(freq, type, duration, vol=0.1) {
@@ -127,11 +221,9 @@ function playTone(freq, type, duration, vol=0.1) {
     osc.type = type;
     osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
     gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + duration);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + duration);
 }
 
 function playSFX(type) {
@@ -140,29 +232,25 @@ function playSFX(type) {
     switch(type) {
         case 'move': playTone(400, 'sine', 0.1, 0.05); break;
         case 'rotate': playTone(600, 'square', 0.1, 0.05); break;
-        case 'lock': playTone(150, 'triangle', 0.15, 0.2); break;
-        case 'hardDrop': playTone(100, 'sawtooth', 0.2, 0.3); break;
-        case 'clear': 
-            playTone(800, 'sine', 0.1, 0.1); 
-            setTimeout(() => playTone(1200, 'sine', 0.3, 0.1), 100); 
+        case 'lock': 
+            // 清脆的短促機械敲擊聲
+            playTone(350, 'square', 0.03, 0.15); 
             break;
-        case 'tetris': // 4行消除
-            playTone(500, 'square', 0.1, 0.1);
-            setTimeout(() => playTone(800, 'square', 0.1, 0.1), 100);
-            setTimeout(() => playTone(1200, 'square', 0.4, 0.15), 200);
+        case 'hardDrop': 
+            // 結合下墜感與更強烈的清脆定位聲
+            playTone(250, 'triangle', 0.05, 0.2); 
+            setTimeout(() => playTone(450, 'square', 0.03, 0.3), 30); 
             break;
-        case 'gameover':
-            playTone(300, 'sawtooth', 0.5, 0.2);
-            setTimeout(() => playTone(250, 'sawtooth', 0.8, 0.2), 300);
-            break;
+        case 'clear': playTone(800, 'sine', 0.1, 0.1); setTimeout(() => playTone(1200, 'sine', 0.3, 0.1), 100); break;
+        case 'tetris': playTone(500, 'square', 0.1, 0.1); setTimeout(() => playTone(800, 'square', 0.1, 0.1), 100); setTimeout(() => playTone(1200, 'square', 0.4, 0.15), 200); break;
+        case 'gameover': playTone(300, 'sawtooth', 0.5, 0.2); setTimeout(() => playTone(250, 'sawtooth', 0.8, 0.2), 300); break;
     }
 }
 
-// 簡易 8-bit 背景音樂琶音器
 function startBGM() {
     if(isMuted || bgmInterval) return;
     initAudio();
-    const notes = [261.63, 329.63, 392.00, 523.25]; // C E G C
+    const notes = [261.63, 329.63, 392.00, 523.25];
     let step = 0;
     bgmInterval = setInterval(() => {
         if(isMuted || isPaused || isGameOver) return;
@@ -175,17 +263,14 @@ function stopBGM() {
     if(bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; }
 }
 
-// ================= 特效系統 =================
+// ================= 特效與遊戲繪製 =================
 function spawnParticles(y, x, colorIndex) {
     const color = COLORS[colorIndex] || '#fff';
     for(let i=0; i<8; i++) {
         particles.push({
-            x: x * BLOCK_SIZE + BLOCK_SIZE/2,
-            y: y * BLOCK_SIZE + BLOCK_SIZE/2,
-            vx: (Math.random() - 0.5) * 15,
-            vy: (Math.random() - 1) * 10,
-            life: 1.0,
-            color: color
+            x: x * BLOCK_SIZE + BLOCK_SIZE/2, y: y * BLOCK_SIZE + BLOCK_SIZE/2,
+            vx: (Math.random() - 0.5) * 15, vy: (Math.random() - 1) * 10,
+            life: 1.0, color: color
         });
     }
 }
@@ -194,20 +279,13 @@ function updateAndDrawParticles() {
     if(particles.length === 0) return;
     for(let i=particles.length-1; i>=0; i--) {
         let p = particles[i];
-        p.x += p.vx; p.y += p.vy;
-        p.vy += 0.8; // 重力
-        p.life -= 0.03;
-        
+        p.x += p.vx; p.y += p.vy; p.vy += 0.8; p.life -= 0.03;
         if(p.life <= 0) { particles.splice(i, 1); continue; }
-        
-        ctx.globalAlpha = p.life;
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, 8, 8);
+        ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 8, 8);
     }
     ctx.globalAlpha = 1.0;
 }
 
-// ================= 遊戲主邏輯 =================
 function initPatterns() {
     HATCH_PATTERNS = [null];
     for (let i = 1; i < COLORS.length; i++) {
@@ -222,11 +300,15 @@ function initPatterns() {
     }
 }
 
-// 由開始選單呼叫
+// ================= 遊戲核心邏輯 =================
 function startGame(mode) {
     initAudio();
     currentMode = mode;
-    document.getElementById('start-menu-dialog').close();
+    
+    // 切換畫面
+    document.getElementById('main-menu').style.display = 'none';
+    document.getElementById('game-layout').style.display = 'flex';
+    document.getElementById('pause-overlay').style.display = 'none';
     
     if (requestId) cancelAnimationFrame(requestId);
     
@@ -234,16 +316,15 @@ function startGame(mode) {
     score = 0; lines = 0; level = 1; timeElapsed = 0;
     dropInterval = 1000;
     isPaused = false; isGameOver = false; isAnimating = false;
-    particles = [];
-    bag = []; nextQueue = []; holdPiece = null; canHold = true; lockStartTime = null;
+    particles = []; bag = []; nextQueue = []; holdPiece = null; canHold = true; lockStartTime = null;
+    keysPressed = {}; keyRepeatTimers = {}; // 清空按鍵狀態
     
     // UI 調整
     document.getElementById('time-box').style.display = (mode === 'sprint' || mode === 'ultra') ? 'block' : 'none';
     document.getElementById('level-box').style.display = (mode === 'sprint' || mode === 'ultra') ? 'none' : 'block';
-    document.getElementById('btn-end').disabled = false;
-    document.getElementById('pause-overlay').style.display = 'none';
     document.getElementById('all-clear-message').classList.remove('show');
     
+    updateLeaderboardUI();
     updateScoreUI();
     fillNextQueue();
     playerReset();
@@ -251,16 +332,15 @@ function startGame(mode) {
     gameStartTime = performance.now();
     lastTime = gameStartTime;
     startBGM();
-    update();
+    update(performance.now());
 }
 
 function endGame(isWin = false) {
     if (isGameOver) return;
     isGameOver = true;
-    stopBGM();
-    playSFX('gameover');
+    keysPressed = {}; // 結束時清空按鍵判定
+    stopBGM(); playSFX('gameover');
     cancelAnimationFrame(requestId);
-    document.getElementById('btn-end').disabled = true;
     
     let title = "GAME OVER";
     if (isWin) title = currentMode === 'sprint' ? "SPRINT CLEARED!" : "TIME'S UP!";
@@ -284,12 +364,8 @@ function updateScoreUI() {
     document.getElementById('lines').innerText = currentMode === 'sprint' ? `${lines}/40` : lines;
     document.getElementById('level').innerText = level;
     
-    if (currentMode === 'sprint') {
-        document.getElementById('time').innerText = formatTime(timeElapsed);
-    } else if (currentMode === 'ultra') {
-        let timeLeft = Math.max(0, ULTRA_TIME_LIMIT - timeElapsed);
-        document.getElementById('time').innerText = formatTime(timeLeft);
-    }
+    if (currentMode === 'sprint') document.getElementById('time').innerText = formatTime(timeElapsed);
+    else if (currentMode === 'ultra') document.getElementById('time').innerText = formatTime(Math.max(0, ULTRA_TIME_LIMIT - timeElapsed));
 }
 
 function resetBoard() { board = Array.from({length: ROWS}, () => Array(COLS).fill(0)); }
@@ -310,12 +386,9 @@ function getPieceMatrix(type) { return PIECES[type].map(row => [...row]); }
 
 function playerReset() {
     if (nextQueue.length === 0) fillNextQueue();
-    const type = nextQueue.shift();
-    fillNextQueue();
-    player.matrix = getPieceMatrix(type);
-    player.type = type;
-    player.pos.y = 0;
-    player.pos.x = (COLS / 2 | 0) - (Math.ceil(player.matrix[0].length / 2));
+    player.type = nextQueue.shift(); fillNextQueue();
+    player.matrix = getPieceMatrix(player.type);
+    player.pos.y = 0; player.pos.x = (COLS / 2 | 0) - (Math.ceil(player.matrix[0].length / 2));
     lockStartTime = null; 
 
     if (collide(board, player)) endGame(false);
@@ -342,9 +415,7 @@ function rotate(matrix, dir) {
 }
 
 function resetLockTimer() {
-    player.pos.y++;
-    lockStartTime = collide(board, player) ? Date.now() : null;
-    player.pos.y--;
+    player.pos.y++; lockStartTime = collide(board, player) ? Date.now() : null; player.pos.y--;
 }
 
 function playerRotate(dir) {
@@ -353,9 +424,7 @@ function playerRotate(dir) {
     const kicks = [[0, 0], [1, 0], [-1, 0], [0, -1], [1, -1], [-1, -1], [2, 0], [-2, 0]];
     for (const [ox, oy] of kicks) {
         player.pos.x = pos + ox; player.pos.y = row + oy;
-        if (!collide(board, player)) {
-            playSFX('rotate'); resetLockTimer(); return;
-        }
+        if (!collide(board, player)) { playSFX('rotate'); resetLockTimer(); return; }
     }
     rotate(player.matrix, dir === 2 ? 2 : -dir);
     player.pos.x = pos; player.pos.y = row;
@@ -368,33 +437,25 @@ function playerDrop() {
         if (lockStartTime === null) lockStartTime = Date.now();
         return; 
     }
-    lockStartTime = null; 
-    dropCounter = 0;
+    lockStartTime = null; dropCounter = 0;
 }
 
 function finalizeMove() {
-    playSFX('lock');
-    merge(board, player);
-    arenaSweep();
+    playSFX('lock'); merge(board, player); arenaSweep();
     if (!isAnimating) playerReset();
     lockStartTime = null;
 }
 
 function triggerShake(type = 'normal') {
     const layout = document.getElementById('game-layout');
-    layout.classList.remove('shake', 'hard-drop-shake');
-    void layout.offsetWidth;
+    layout.classList.remove('shake', 'hard-drop-shake'); void layout.offsetWidth;
     layout.classList.add(type === 'hard' ? 'hard-drop-shake' : 'shake');
 }
 
 function playerHardDrop() {
     while (!collide(board, player)) player.pos.y++;
-    player.pos.y--;
-    playSFX('hardDrop');
-    triggerShake('hard');
-    finalizeMove();
-    score += 20;
-    dropCounter = 0;
+    player.pos.y--; playSFX('hardDrop'); triggerShake('hard'); finalizeMove();
+    score += 20; dropCounter = 0;
 }
 
 function merge(arena, player) {
@@ -414,25 +475,19 @@ function arenaSweep() {
     }
 
     if (rowsToClear.length > 0) {
-        isAnimating = true;
-        triggerShake('normal');
-        
-        // 音效與特效
-        if (rowsToClear.length >= 4) playSFX('tetris');
-        else playSFX('clear');
+        isAnimating = true; triggerShake('normal');
+        if (rowsToClear.length >= 4) playSFX('tetris'); else playSFX('clear');
 
         rowsToClear.forEach(y => {
             for(let x=0; x<COLS; x++) spawnParticles(y, x, board[y][x]);
-            board[y].fill(0); // 直接挖空讓粒子顯示
+            board[y].fill(0);
         });
         
-        // 延遲讓粒子飛一下再補齊方塊
         setTimeout(() => {
             board = board.filter((row, y) => !rowsToClear.includes(y));
             while (board.length < ROWS) board.unshift(new Array(COLS).fill(0));
 
-            let isAllClear = board.every(row => row.every(val => val === 0));
-            if (isAllClear) {
+            if (board.every(row => row.every(val => val === 0))) {
                 const msg = document.getElementById('all-clear-message');
                 msg.classList.remove('show'); void msg.offsetWidth; msg.classList.add('show');
                 score += 2000 * level;
@@ -446,14 +501,9 @@ function arenaSweep() {
             dropInterval = Math.max(100, 1000 - (level - 1) * 100);
             
             updateScoreUI();
-            
-            // 檢查衝刺模式勝利條件
-            if (currentMode === 'sprint' && lines >= 40) {
-                endGame(true);
-            }
+            if (currentMode === 'sprint' && lines >= 40) endGame(true);
 
-            isAnimating = false;
-            playerReset();
+            isAnimating = false; playerReset();
         }, 200);
     }
 }
@@ -462,8 +512,7 @@ function playerHold() {
     if (!canHold || isPaused || isGameOver || isAnimating) return;
     playSFX('move');
     if (holdPiece === null) {
-        holdPiece = player.type;
-        playerReset();
+        holdPiece = player.type; playerReset();
     } else {
         const temp = player.type; player.type = holdPiece; holdPiece = temp;
         player.matrix = getPieceMatrix(player.type);
@@ -485,18 +534,15 @@ function draw() {
         ctx.globalAlpha = 1.0;
     }
 
-    updateAndDrawParticles();
-    drawNext(); drawHold();
+    updateAndDrawParticles(); drawNext(); drawHold();
 }
 
 function drawMatrix(matrix, offset, context) {
     matrix.forEach((row, y) => {
         row.forEach((value, x) => {
             if (value !== 0) {
-                const px = (x + offset.x) * BLOCK_SIZE;
-                const py = (y + offset.y) * BLOCK_SIZE;
-                context.fillStyle = COLORS[value] + '44'; 
-                context.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
+                const px = (x + offset.x) * BLOCK_SIZE; const py = (y + offset.y) * BLOCK_SIZE;
+                context.fillStyle = COLORS[value] + '44'; context.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
                 if (HATCH_PATTERNS[value]) {
                     context.fillStyle = HATCH_PATTERNS[value];
                     context.save(); context.translate(px, py); context.fillRect(0, 0, BLOCK_SIZE, BLOCK_SIZE); context.restore();
@@ -510,8 +556,7 @@ function drawMatrix(matrix, offset, context) {
 
 function drawGhost() {
     const ghost = { pos: {...player.pos}, matrix: player.matrix };
-    while(!collide(board, ghost)) ghost.pos.y++; 
-    ghost.pos.y--;
+    while(!collide(board, ghost)) ghost.pos.y++;  ghost.pos.y--;
     ghost.matrix.forEach((row, y) => {
         row.forEach((value, x) => {
             if (value !== 0) {
@@ -536,24 +581,58 @@ function drawNext() {
 function drawHold() {
     holdCtx.clearRect(0, 0, holdCanvas.width, holdCanvas.height);
     if (holdPiece) {
-        const m = PIECES[holdPiece];
-        drawMatrix(m, {x: (4 - m[0].length) / 2, y: (4 - m.length) / 2}, holdCtx);
+        const m = PIECES[holdPiece]; drawMatrix(m, {x: (4 - m[0].length) / 2, y: (4 - m.length) / 2}, holdCtx);
     }
 }
 
-function update(time = 0) {
-    if (isPaused || isGameOver) return;
+// 執行指定按鍵的動作
+function executeAction(code) {
+    let moved = false;
+    switch(code) {
+        case keybinds.left:
+            player.pos.x--; if (collide(board, player)) player.pos.x++; else { resetLockTimer(); moved=true; } break;
+        case keybinds.right:
+            player.pos.x++; if (collide(board, player)) player.pos.x--; else { resetLockTimer(); moved=true; } break;
+        case keybinds.softDrop:
+            playerDrop(); moved=true; break;
+        case keybinds.rotateCW:
+            playerRotate(1); break;
+        case keybinds.rotateCCW:
+            playerRotate(-1); break;
+        case keybinds.rotate180:
+            playerRotate(2); break;
+        case keybinds.hardDrop:
+            playerHardDrop(); break;
+        case keybinds.hold:
+            playerHold(); break;
+    }
+    if(moved) playSFX('move');
+    draw();
+}
+
+function update(time = performance.now()) {
+    if (isPaused || isGameOver || document.getElementById('game-layout').style.display === 'none') return;
     const deltaTime = time - lastTime;
     lastTime = time;
 
-    // 更新計時器
+    // --- 處理長按連續移動 (DAS/ARR 系統) ---
+    for (let code in keysPressed) {
+        if (keysPressed[code]) {
+            // 只有左右跟軟降需要連續觸發
+            if (code === keybinds.left || code === keybinds.right || code === keybinds.softDrop) {
+                if (time >= keyRepeatTimers[code]) {
+                    executeAction(code);
+                    keyRepeatTimers[code] = time + ARR; // 更新為下一次重複觸發的時間
+                }
+            }
+        }
+    }
+
     timeElapsed = performance.now() - gameStartTime;
     updateScoreUI();
 
-    // 檢查計時賽結束條件
     if (currentMode === 'ultra' && timeElapsed >= ULTRA_TIME_LIMIT) {
-        endGame(true);
-        return;
+        endGame(true); return;
     }
 
     if (!isAnimating) {
@@ -567,53 +646,43 @@ function update(time = 0) {
 }
 
 function handleInput(event) {
-    if (isAnimating) return;
-    if (isGameOver && event.keyCode !== 27) return;
+    if (listeningKeyAction) {
+        event.preventDefault();
+        keybinds[listeningKeyAction] = event.code;
+        renderSettingsKeys();
+        listeningKeyAction = null;
+        return;
+    }
 
-    if (event.keyCode === 27) { // ESC
-        if (!document.getElementById('btn-end').disabled) {
-            isPaused = !isPaused;
-            const overlay = document.getElementById('pause-overlay');
-            if (isPaused) {
-                overlay.style.display = 'flex'; stopBGM(); cancelAnimationFrame(requestId);
-            } else {
-                overlay.style.display = 'none'; startBGM();
-                // 暫停恢復時，校正時間避免計時器亂跳
-                gameStartTime += performance.now() - lastTime;
-                lastTime = performance.now();
-                update();
-            }
+    if (document.getElementById('game-layout').style.display === 'none') return;
+    if (isAnimating || (isGameOver && event.code !== 'Escape')) return;
+
+    if (event.code === 'Escape') {
+        isPaused = !isPaused;
+        const overlay = document.getElementById('pause-overlay');
+        if (isPaused) {
+            overlay.style.display = 'flex'; stopBGM(); cancelAnimationFrame(requestId);
+            keysPressed = {}; // 暫停時清空按鍵
+        } else {
+            overlay.style.display = 'none'; startBGM();
+            gameStartTime += performance.now() - lastTime;
+            lastTime = performance.now();
+            update(performance.now());
         }
         return;
     }
 
     if (isPaused) return;
-    if([32, 73, 74, 75, 76, 79, 85].includes(event.keyCode)) event.preventDefault();
 
-    let moved = false;
-    switch(event.keyCode) {
-        case 74: // J (Left)
-            player.pos.x--;
-            if (collide(board, player)) player.pos.x++; else { resetLockTimer(); moved=true; }
-            break;
-        case 76: // L (Right)
-            player.pos.x++;
-            if (collide(board, player)) player.pos.x--; else { resetLockTimer(); moved=true; }
-            break;
-        case 75: // K (Down/Soft Drop)
-            playerDrop(); moved=true; break;
-        case 73: // I (Rotate CW)
-            playerRotate(1); break;
-        case 85: // U (Rotate CCW)
-            playerRotate(-1); break;
-        case 79: // O (Rotate 180)
-            playerRotate(2); break;
-        case 32: // Space (Hard Drop)
-            playerHardDrop(); break;
-        case 16: // Shift
-        case 67: // C
-            playerHold(); break;
+    // 阻擋所有綁定按鍵的預設瀏覽器行為 (避免空白鍵捲動網頁等)
+    if (Object.values(keybinds).includes(event.code)) {
+        event.preventDefault();
     }
-    if(moved) playSFX('move');
-    draw();
+
+    // 當按鍵被「第一次」按下時立刻觸發，並啟動延遲計時器 (DAS)
+    if (!keysPressed[event.code]) {
+        keysPressed[event.code] = true;
+        keyRepeatTimers[event.code] = performance.now() + DAS;
+        executeAction(event.code);
+    }
 }

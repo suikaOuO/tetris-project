@@ -34,7 +34,35 @@
     </div>
 </div>
 
-<div id="game-layout">
+<!-- ================= 遊戲主目錄 ================= -->
+<div id="main-menu" class="screen-layer active">
+    <div class="menu-container">
+        <h1 class="game-title" style="transform: rotate(-3deg);">TETRIS</h1>
+        
+        <div class="mode-buttons">
+            <button onclick="startGame('marathon')">
+                <strong>🏃 馬拉松模式</strong><br>
+                <small>經典無盡，挑戰最高分</small>
+            </button>
+            <button onclick="startGame('sprint')">
+                <strong>⚡ 40行衝刺</strong><br>
+                <small>計時挑戰，比誰消得快</small>
+            </button>
+            <button onclick="startGame('ultra')">
+                <strong>⏱️ 2分鐘計時賽</strong><br>
+                <small>限時刷分，挑戰極限</small>
+            </button>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
+            <button onclick="openSettings()" class="secondary-btn">⚙️ 設定按鍵</button>
+            <button id="btn-mute-menu" onclick="toggleMute()" class="secondary-btn">🔊 聲音: 開</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================= 遊戲畫面 ================= -->
+<div id="game-layout" class="screen-layer" style="display: none;">
     <!-- 左側面板 -->
     <div class="side-panel">
         <div class="panel-section">
@@ -42,25 +70,26 @@
             <canvas id="hold-canvas" class="mini-canvas" width="120" height="120"></canvas>
         </div>
         
-        <!-- 排行榜區塊 -->
+        <!-- 動態排行榜區塊 -->
         <div class="panel-section leaderboard-section">
-            <h3>🏆 排行榜</h3>
-            <div id="leaderboard-content">
-                <div class="lb-mode">馬拉松: <span id="lb-marathon">-</span></div>
-                <div class="lb-mode">40行: <span id="lb-sprint">-</span></div>
-                <div class="lb-mode">計時賽: <span id="lb-ultra">-</span></div>
-            </div>
+            <h3>🏆 最高紀錄</h3>
+            <div id="current-mode-record" style="font-size: 1.6rem; color: #15803d; font-weight: bold;">-</div>
+            <div id="current-mode-name" style="font-size: 0.9rem; color: #64748b; margin-top: 5px;">-</div>
         </div>
 
         <div class="controls-info">
-            <div class="key-row"><span class="key-badge">Shift</span> <span>暫存</span></div>
-            <div class="key-row"><span class="key-badge">Space</span> <span>直接落下</span></div>
-            <div class="key-row"><span class="key-badge">J</span><span class="key-badge">L</span> <span>左右移動</span></div>
-            <div class="key-row"><span class="key-badge">K</span> <span>軟降</span></div>
-            <div class="key-row"><span class="key-badge">I</span> <span>順時轉</span></div>
-            <div class="key-row"><span class="key-badge">U</span> <span>逆時轉</span></div>
-            <div class="key-row"><span class="key-badge">O</span> <span>180轉</span></div>
-            <div class="key-row"><span class="key-badge">ESC</span> <span>暫停</span></div>
+            <div class="key-row"><span class="key-badge" id="kb-hold">Shift</span> <span>暫存</span></div>
+            <div class="key-row"><span class="key-badge" id="kb-hardDrop">Space</span> <span>直接落下</span></div>
+            <div class="key-row">
+                <span class="key-badge" id="kb-left">J</span>
+                <span class="key-badge" id="kb-right">L</span> 
+                <span>左右移動</span>
+            </div>
+            <div class="key-row"><span class="key-badge" id="kb-softDrop">K</span> <span>軟降</span></div>
+            <div class="key-row"><span class="key-badge" id="kb-rotateCW">I</span> <span>順時轉</span></div>
+            <div class="key-row"><span class="key-badge" id="kb-rotateCCW">U</span> <span>逆時轉</span></div>
+            <div class="key-row"><span class="key-badge" id="kb-rotate180">O</span> <span>180轉</span></div>
+            <div class="key-row"><span class="key-badge">ESC</span> <span>暫停/返回</span></div>
         </div>
     </div>
 
@@ -74,6 +103,7 @@
         <div id="pause-overlay">
             <div style="font-size: 3rem; transform: rotate(-5deg);">PAUSED</div>
             <div style="font-size: 1.2rem; margin-top: 10px;">按 ESC 繼續塗鴉</div>
+            <button onclick="saveAndReset()" style="width: 80%; margin-top: 20px;">放棄並回目錄</button>
         </div>
     </div>
 
@@ -104,28 +134,23 @@
         </div>
 
         <div style="margin-top: 15px;">
-            <button id="btn-mute" class="toggle-btn">🔊 聲音: 開</button>
-            <button id="btn-end" disabled>結束遊戲</button>
+            <button id="btn-mute-game" onclick="toggleMute()" class="toggle-btn">🔊 聲音: 開</button>
         </div>
     </div>
 </div>
 
-<!-- 模式選擇選單 -->
-<dialog id="start-menu-dialog" open>
-    <h2 style="transform: rotate(-3deg);">選擇遊戲模式</h2>
-    <div class="mode-buttons">
-        <button onclick="startGame('marathon')">
-            <strong>🏃 馬拉松</strong><br>
-            <small>經典無盡模式，挑戰最高分</small>
-        </button>
-        <button onclick="startGame('sprint')">
-            <strong>⚡ 40行衝刺</strong><br>
-            <small>計時挑戰，最快消除40行</small>
-        </button>
-        <button onclick="startGame('ultra')">
-            <strong>⏱️ 計時賽</strong><br>
-            <small>限時 2 分鐘，挑戰最高分</small>
-        </button>
+<!-- ================= 設定對話框 ================= -->
+<dialog id="settings-dialog">
+    <h2 style="transform: rotate(-2deg); margin-bottom: 20px;">⚙️ 按鍵設定</h2>
+    <p style="font-size: 0.9rem; color:#64748b; margin-bottom: 15px;">點擊按鈕後，按下你想要設定的新按鍵</p>
+    
+    <div id="keybinds-container" class="keybinds-grid">
+        <!-- JS 動態生成 -->
+    </div>
+
+    <div style="display: flex; gap: 10px; margin-top: 25px;">
+        <button onclick="resetDefaultKeys()" style="background:#f1f5f9; color:#475569;">恢復預設</button>
+        <button onclick="closeSettings()" style="background:#22c55e; color:#fff; border-color:#166534;">完成</button>
     </div>
 </dialog>
 
