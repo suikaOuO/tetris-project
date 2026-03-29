@@ -42,6 +42,16 @@
             <canvas id="hold-canvas" class="mini-canvas" width="120" height="120"></canvas>
         </div>
         
+        <!-- 排行榜區塊 -->
+        <div class="panel-section leaderboard-section">
+            <h3>🏆 排行榜</h3>
+            <div id="leaderboard-content">
+                <div class="lb-mode">馬拉松: <span id="lb-marathon">-</span></div>
+                <div class="lb-mode">40行: <span id="lb-sprint">-</span></div>
+                <div class="lb-mode">計時賽: <span id="lb-ultra">-</span></div>
+            </div>
+        </div>
+
         <div class="controls-info">
             <div class="key-row"><span class="key-badge">Shift</span> <span>暫存</span></div>
             <div class="key-row"><span class="key-badge">Space</span> <span>直接落下</span></div>
@@ -75,6 +85,10 @@
         </div>
 
         <div class="panel-section" style="margin-top: auto;">
+            <div class="score-box" id="time-box" style="display: none;">
+                <div class="score-label">TIME</div>
+                <div class="score-val" id="time">00:00</div>
+            </div>
             <div class="score-box">
                 <div class="score-label">SCORE</div>
                 <div class="score-val" id="score">0</div>
@@ -83,25 +97,51 @@
                 <div class="score-label">LINES</div>
                 <div class="score-val" id="lines">0</div>
             </div>
-            <div class="score-box">
+            <div class="score-box" id="level-box">
                 <div class="score-label">LEVEL</div>
                 <div class="score-val" id="level">1</div>
             </div>
         </div>
 
         <div style="margin-top: 15px;">
-            <button id="btn-start">開始遊戲</button>
+            <button id="btn-mute" class="toggle-btn">🔊 聲音: 開</button>
             <button id="btn-end" disabled>結束遊戲</button>
         </div>
     </div>
 </div>
 
+<!-- 模式選擇選單 -->
+<dialog id="start-menu-dialog" open>
+    <h2 style="transform: rotate(-3deg);">選擇遊戲模式</h2>
+    <div class="mode-buttons">
+        <button onclick="startGame('marathon')">
+            <strong>🏃 馬拉松</strong><br>
+            <small>經典無盡模式，挑戰最高分</small>
+        </button>
+        <button onclick="startGame('sprint')">
+            <strong>⚡ 40行衝刺</strong><br>
+            <small>計時挑戰，最快消除40行</small>
+        </button>
+        <button onclick="startGame('ultra')">
+            <strong>⏱️ 計時賽</strong><br>
+            <small>限時 2 分鐘，挑戰最高分</small>
+        </button>
+    </div>
+</dialog>
+
+<!-- 遊戲結束對話框 -->
 <dialog id="game-over-dialog">
-    <h2 style="transform: rotate(-3deg);">GAME OVER</h2>
-    <p>最終分數</p>
+    <h2 id="go-title" style="transform: rotate(-3deg);">GAME OVER</h2>
+    <p id="go-desc">最終分數</p>
     <h1 id="final-score">0</h1>
+    
+    <div id="new-record-box" style="display: none; margin-bottom: 15px;">
+        <h3 style="color: #f59e0b; margin:0;">🎉 新紀錄！</h3>
+        <input type="text" id="player-name" placeholder="輸入你的大名" maxlength="10">
+    </div>
+
     <div style="display: flex; gap: 10px; justify-content: center;">
-        <button onclick="resetGame()" class="action-btn">再玩一次</button>
+        <button onclick="saveAndReset()" class="action-btn">儲存並回主選單</button>
     </div>
 </dialog>
 
