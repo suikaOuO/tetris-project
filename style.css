@@ -91,7 +91,12 @@ body {
 .mode-buttons small { font-size: 1rem; color: #64748b; margin-top: 5px; }
 .mode-buttons button:hover strong, .mode-buttons button:hover small { color: #fff; }
 
-.secondary-btn { font-size: 1.1rem; padding: 8px 15px; }
+.secondary-btn { 
+    font-size: 1.1rem; 
+    padding: 8px 15px; 
+    width: auto; 
+    white-space: nowrap; 
+}
 
 /* 遊戲畫面佈局 */
 #game-layout {
@@ -133,10 +138,10 @@ body {
 }
 .hard-drop-shake { animation: hard-shake 0.15s cubic-bezier(.36,.07,.19,.97) both; }
 @keyframes hard-shake {
-    0% { transform: translate3d(0, 5px, 0); }
-    25% { transform: translate3d(0, -3px, 0); }
-    50% { transform: translate3d(0, 2px, 0); }
-    75% { transform: translate3d(0, -1px, 0); }
+    0% { transform: translate3d(0, 2px, 0); }
+    25% { transform: translate3d(0, -1px, 0); }
+    50% { transform: translate3d(0, 1px, 0); }
+    75% { transform: translate3d(0, 0, 0); }
     100% { transform: translate3d(0, 0, 0); }
 }
 

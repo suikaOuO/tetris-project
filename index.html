@@ -14,6 +14,7 @@
 
 <!-- 背景裝飾層 -->
 <div id="bg-decoration">
+    <!-- 原本的方塊 -->
     <div class="bg-piece shape-i" style="--c: #22d3ee; top: 10%; left: 5%; animation-delay: 0s;">
         <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
     </div>
@@ -32,6 +33,37 @@
      <div class="bg-piece shape-j" style="--c: #3b82f6; top: 5%; left: 40%; filter: blur(2px); opacity: 0.4; transform: scale(0.6); animation-delay: -5s;">
         <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
     </div>
+    
+    <!-- 原本新增的方塊 -->
+    <div class="bg-piece shape-t" style="--c: #22c55e; top: 30%; left: -2%; filter: blur(3px); opacity: 0.5; transform: scale(0.5); animation-delay: -7s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+    <div class="bg-piece shape-i" style="--c: #f97316; bottom: 10%; right: 15%; opacity: 0.3; transform: scale(0.7) rotate(90deg); animation-delay: -2.5s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+    <div class="bg-piece shape-o" style="--c: #ef4444; top: 75%; right: -5%; filter: blur(1px); transform: scale(1.1); animation-delay: -6s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+    <div class="bg-piece shape-l" style="--c: #3b82f6; top: -5%; right: 30%; opacity: 0.5; transform: scale(0.6); animation-delay: -1.5s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+    <div class="bg-piece shape-z" style="--c: #a855f7; bottom: 35%; left: 15%; filter: blur(4px); opacity: 0.4; transform: scale(0.4); animation-delay: -8s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+    <div class="bg-piece shape-j" style="--c: #22d3ee; top: 40%; right: 20%; opacity: 0.2; transform: scale(0.9); animation-delay: -4.5s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+
+    <!-- 針對中間偏左補充的方塊 -->
+    <div class="bg-piece shape-o" style="--c: #eab308; top: 48%; left: 10%; opacity: 0.4; transform: scale(0.75) rotate(15deg); animation-delay: -3.5s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+    <div class="bg-piece shape-j" style="--c: #3b82f6; top: 75%; left: 18%; opacity: 0.5; filter: blur(1px); transform: scale(0.8) rotate(-20deg); animation-delay: -5.5s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
+    <div class="bg-piece shape-i" style="--c: #22d3ee; top: 20%; left: 15%; opacity: 0.3; filter: blur(2px); transform: scale(0.6) rotate(45deg); animation-delay: -1.2s;">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    </div>
 </div>
 
 <!-- ================= 遊戲主目錄 ================= -->
@@ -41,7 +73,7 @@
         
         <div class="mode-buttons">
             <button onclick="startGame('marathon')">
-                <strong>🏃 馬拉松模式</strong><br>
+                <strong>🏃 無盡模式</strong><br>
                 <small>經典無盡，挑戰最高分</small>
             </button>
             <button onclick="startGame('sprint')">
@@ -55,7 +87,7 @@
         </div>
 
         <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
-            <button onclick="openSettings()" class="secondary-btn">⚙️ 設定按鍵</button>
+            <button onclick="openSettings()" class="secondary-btn">⚙️ 按鍵設定</button>
             <button id="btn-mute-menu" onclick="toggleMute()" class="secondary-btn">🔊 聲音: 開</button>
         </div>
     </div>
@@ -72,7 +104,7 @@
         
         <!-- 動態排行榜區塊 -->
         <div class="panel-section leaderboard-section">
-            <h3>🏆 最高紀錄</h3>
+            <h3 style="white-space: nowrap; font-size: 1.3rem;">🏆 最高紀錄</h3>
             <div id="current-mode-record" style="font-size: 1.6rem; color: #15803d; font-weight: bold;">-</div>
             <div id="current-mode-name" style="font-size: 0.9rem; color: #64748b; margin-top: 5px;">-</div>
         </div>
@@ -103,7 +135,8 @@
         <div id="pause-overlay">
             <div style="font-size: 3rem; transform: rotate(-5deg);">PAUSED</div>
             <div style="font-size: 1.2rem; margin-top: 10px;">按 ESC 繼續塗鴉</div>
-            <button onclick="saveAndReset()" style="width: 80%; margin-top: 20px;">放棄並回目錄</button>
+            <button onclick="startGame(currentMode)" style="width: 80%; margin-top: 25px; background: #22c55e; color: #fff; border-color: #166534;">重新開始</button>
+            <button onclick="saveAndReset()" style="width: 80%; margin-top: 10px; background: #f1f5f9; color: #475569;">放棄並回目錄</button>
         </div>
     </div>
 
