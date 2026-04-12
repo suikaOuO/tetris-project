@@ -86,7 +86,7 @@ body {
 }
 
 .mode-buttons { display: flex; flex-direction: column; gap: 15px; }
-.mode-buttons button { padding: 15px; text-align: left; display: flex; flex-direction: column; }
+.mode-buttons button { padding: 15px; text-align: center; display: flex; flex-direction: column; align-items: center; }
 .mode-buttons strong { font-size: 1.5rem; color: #15803d; }
 .mode-buttons small { font-size: 1rem; color: #64748b; margin-top: 5px; }
 .mode-buttons button:hover strong, .mode-buttons button:hover small { color: #fff; }
