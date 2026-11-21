@@ -94,55 +94,55 @@
     </div>
 </div>
 
+
 <!-- ================= 遊戲主目錄 ================= -->
-<div id="main-menu" class="screen-layer active">
+<div id="main-menu" class="screen-layer">
     <div class="menu-container">
-        <h1 class="game-title" style="transform: rotate(-3deg);">TETRIS</h1>
-        
+        <h1 class="game-title">TETRIS</h1>
+
         <div class="mode-buttons">
-            <button onclick="startGame('marathon')">
-                <strong>馬拉松模式</strong><br>
+            <button type="button" data-mode="marathon">
+                <strong>馬拉松模式</strong>
                 <small>經典無盡，挑戰最高分</small>
             </button>
-            <button onclick="startGame('sprint')">
-                <strong>40行衝刺</strong><br>
+            <button type="button" data-mode="sprint">
+                <strong>40行衝刺</strong>
                 <small>計時挑戰，比誰消得快</small>
             </button>
-            <button onclick="startGame('ultra')">
-                <strong>2分鐘計時賽</strong><br>
+            <button type="button" data-mode="ultra">
+                <strong>2分鐘計時賽</strong>
                 <small>限時刷分，挑戰極限</small>
             </button>
         </div>
 
-        <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
-            <button onclick="openSettings()" class="secondary-btn">⚙️ 按鍵設定</button>
-            <button id="btn-mute-menu" onclick="toggleMute()" class="secondary-btn">🔊 聲音: 開</button>
+        <div class="menu-actions">
+            <button type="button" id="btn-settings" class="secondary-btn">⚙️ 按鍵設定</button>
+            <button type="button" id="btn-mute-menu" class="secondary-btn">🔊 聲音: 開</button>
         </div>
     </div>
 </div>
 
 <!-- ================= 遊戲畫面 ================= -->
-<div id="game-layout" class="screen-layer" style="display: none;">
+<div id="game-layout" class="screen-layer" hidden>
     <!-- 左側面板 -->
     <div class="side-panel">
         <div class="panel-section">
             <h3>HOLD</h3>
             <canvas id="hold-canvas" class="mini-canvas" width="120" height="120"></canvas>
         </div>
-        
+
         <!-- 動態排行榜區塊 -->
         <div class="panel-section leaderboard-section">
-            <h3 style="white-space: nowrap; font-size: 1.3rem;">🏆 最高紀錄</h3>
-            <div id="current-mode-record" style="font-size: 1.6rem; color: #15803d; font-weight: bold;">-</div>
-            <div id="current-mode-name" style="font-size: 0.9rem; color: #64748b; margin-top: 5px;">-</div>
+            <h3 class="leaderboard-title">🏆 最高紀錄</h3>
+            <div id="current-mode-name" class="lb-mode">-</div>
+            <ol id="leaderboard-list" class="lb-list"></ol>
         </div>
 
         <div class="controls-info">
             <div class="key-row"><span class="key-badge" id="kb-hold">Shift</span> <span>暫存</span></div>
             <div class="key-row"><span class="key-badge" id="kb-hardDrop">Space</span> <span>直接落下</span></div>
             <div class="key-row">
-                <span class="key-badge" id="kb-left">J</span>
-                <span class="key-badge" id="kb-right">L</span> 
+                <span><span class="key-badge" id="kb-left">J</span> <span class="key-badge" id="kb-right">L</span></span>
                 <span>左右移動</span>
             </div>
             <div class="key-row"><span class="key-badge" id="kb-softDrop">K</span> <span>軟降</span></div>
@@ -154,17 +154,19 @@
     </div>
 
     <!-- 中間面板 -->
-    <div style="position: relative;">
+    <div class="board-wrap">
         <canvas id="main-canvas" width="300" height="600"></canvas>
-        
-        <!-- All Clear 特效文字 -->
-        <div id="all-clear-message">ALL CLEAR!</div>
 
-        <div id="pause-overlay">
-            <div style="font-size: 3rem; transform: rotate(-5deg);">PAUSED</div>
-            <div style="font-size: 1.2rem; margin-top: 10px;">按 ESC 繼續塗鴉</div>
-            <button onclick="startGame(currentMode)" style="width: 80%; margin-top: 25px; background: #22c55e; color: #fff; border-color: #166534;">重新開始</button>
-            <button onclick="saveAndReset()" style="width: 80%; margin-top: 10px; background: #f1f5f9; color: #475569;">放棄並回目錄</button>
+        <!-- 特效文字 -->
+        <div id="all-clear-message" class="pop-text">ALL CLEAR!</div>
+        <div id="action-text" class="pop-text"></div>
+
+        <div id="pause-overlay" hidden>
+            <div class="pause-title">PAUSED</div>
+            <div class="pause-hint">按 ESC 繼續塗鴉</div>
+            <button type="button" id="btn-resume" class="primary-btn">繼續遊戲</button>
+            <button type="button" id="btn-restart">重新開始</button>
+            <button type="button" id="btn-quit" class="muted-btn">放棄並回目錄</button>
         </div>
     </div>
 
@@ -175,10 +177,10 @@
             <canvas id="next-canvas" class="mini-canvas" width="120" height="360"></canvas>
         </div>
 
-        <div class="panel-section" style="margin-top: auto;">
-            <div class="score-box" id="time-box" style="display: none;">
+        <div class="panel-section stats-section">
+            <div class="score-box" id="time-box" hidden>
                 <div class="score-label">TIME</div>
-                <div class="score-val" id="time">00:00</div>
+                <div class="score-val" id="time">00:00.00</div>
             </div>
             <div class="score-box">
                 <div class="score-label">SCORE</div>
@@ -194,40 +196,73 @@
             </div>
         </div>
 
-        <div style="margin-top: 15px;">
-            <button id="btn-mute-game" onclick="toggleMute()" class="toggle-btn">🔊 聲音: 開</button>
+        <div class="mute-wrap">
+            <button type="button" id="btn-mute-game" class="toggle-btn">🔊 聲音: 開</button>
         </div>
+    </div>
+</div>
+
+<!-- ================= 觸控按鈕 (只在觸控裝置顯示) ================= -->
+<div id="touch-controls">
+    <div class="tc-group">
+        <button type="button" class="tc-btn" data-action="left" aria-label="向左">←</button>
+        <button type="button" class="tc-btn" data-action="softDrop" aria-label="軟降">↓</button>
+        <button type="button" class="tc-btn" data-action="right" aria-label="向右">→</button>
+    </div>
+    <button type="button" id="tc-pause" class="tc-pause" aria-label="暫停">II</button>
+    <div class="tc-group">
+        <button type="button" class="tc-btn tc-small" data-action="hold">HOLD</button>
+        <button type="button" class="tc-btn tc-small" data-action="hardDrop">DROP</button>
+        <button type="button" class="tc-btn" data-action="rotateCCW" aria-label="逆時針旋轉">↺</button>
+        <button type="button" class="tc-btn" data-action="rotateCW" aria-label="順時針旋轉">↻</button>
     </div>
 </div>
 
 <!-- ================= 設定對話框 ================= -->
 <dialog id="settings-dialog">
-    <h2 style="transform: rotate(-2deg); margin-bottom: 20px;">⚙️ 按鍵設定</h2>
-    <p style="font-size: 0.9rem; color:#64748b; margin-bottom: 15px;">點擊按鈕後，按下你想要設定的新按鍵</p>
-    
+    <h2 class="dialog-title">⚙️ 按鍵設定</h2>
+    <p id="settings-hint" class="settings-hint">點擊按鈕後，按下你想要設定的新按鍵（ESC 取消）</p>
+
     <div id="keybinds-container" class="keybinds-grid">
         <!-- JS 動態生成 -->
     </div>
 
-    <div style="display: flex; gap: 10px; margin-top: 25px;">
-        <button onclick="resetDefaultKeys()" style="background:#f1f5f9; color:#475569;">恢復預設</button>
-        <button onclick="closeSettings()" style="background:#22c55e; color:#fff; border-color:#166534;">完成</button>
+    <h3 class="settings-subtitle">操作手感</h3>
+    <div class="handling-grid">
+        <label class="handling-item">
+            <span>DAS 長按延遲 <b id="val-das"></b></span>
+            <input type="range" id="set-das" min="0" max="400" step="5">
+        </label>
+        <label class="handling-item">
+            <span>ARR 連續移動間隔 <b id="val-arr"></b></span>
+            <input type="range" id="set-arr" min="0" max="200" step="5">
+        </label>
+        <label class="handling-item">
+            <span>軟降速度間隔 <b id="val-sdf"></b></span>
+            <input type="range" id="set-sdf" min="0" max="200" step="5">
+        </label>
+    </div>
+
+    <div class="dialog-actions">
+        <button type="button" id="btn-reset-keys" class="muted-btn">恢復預設</button>
+        <button type="button" id="btn-close-settings" class="primary-btn">完成</button>
     </div>
 </dialog>
 
 <!-- 遊戲結束對話框 -->
 <dialog id="game-over-dialog">
-    <h2 id="go-title" style="transform: rotate(-3deg);">GAME OVER</h2>
-    <p id="go-desc">最終分數</p>
+    <h2 id="go-title" class="dialog-title">GAME OVER</h2>
+    <p id="go-desc">最終成績</p>
     <h1 id="final-score">0</h1>
-    
-    <div id="new-record-box" style="display: none; margin-bottom: 15px;">
-        <h3 style="color: #f59e0b; margin:0;">🎉 新紀錄！</h3>
-        <input type="text" id="player-name" placeholder="輸入你的大名" maxlength="10">
+
+    <div id="new-record-box" hidden>
+        <h3 id="new-record-title" class="new-record-title">新紀錄！</h3>
+        <input type="text" id="player-name" placeholder="輸入你的大名" maxlength="10" autocomplete="nickname">
     </div>
 
-    <div style="display: flex; gap: 10px; justify-content: center;">
-        <button onclick="saveAndReset()" class="action-btn">儲存並回主選單</button>
+    <div class="dialog-actions">
+        <button type="button" id="btn-to-menu" class="muted-btn">回主選單</button>
+        <button type="button" id="btn-replay" class="primary-btn">再玩一次</button>
     </div>
 </dialog>
 
